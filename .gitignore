@@ -1,0 +1,24 @@
+.env
+.venv/
+dados/
+saida/
+entrada/
+!exemplos/
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.pytest_cache/
+
+# Backups do banco: reproduziveis e pesados.
+backups/
+*.bak.sqlite3
+
+# Pagina gerada pelo `publicar --netlify`: contem a URL do seu Firebase.
+publicado/
+
+# Arquivos temporarios de diagnostico.
+_*.py
+_*.json
+_*.txt

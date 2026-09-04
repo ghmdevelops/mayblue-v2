@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>flow02</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2358b0f5'/><rect x='7' y='18' width='4' height='7' fill='%230f1117'/><rect x='14' y='12' width='4' height='13' fill='%230f1117'/><rect x='21' y='7' width='4' height='18' fill='%230f1117'/></svg>">
+<link rel="stylesheet" href="/estatico/estilo.css">
+<!-- Instalável: o Chrome oferece "Instalar" e o painel abre como programa,
+     sem barra de endereço. O token continua sendo necessário. -->
+<link rel="manifest" href="/estatico/manifest.json">
+<meta name="theme-color" content="#0a0c11">
+<link rel="apple-touch-icon" href="/estatico/icone.svg">
+</head>
+<body>
+
+<header>
+  <div class="marca">flow02 <span class="sub">curadoria de ofertas</span></div>
+  <div class="indicadores" id="indicadores"></div>
+</header>
+
+<div id="alerta-coleta" class="faixa-alerta" hidden></div>
+
+<nav class="abas" id="abas">
+  <button class="aba ativa" data-painel="ranking"
+    data-dica="Todos os produtos coletados hoje, ordenados pelo critério que você escolher. É daqui que você escolhe o que divulgar.">Ranking</button>
+  <button class="aba" data-painel="vitrine"
+    data-dica="Sua seleção curada — só os produtos que você marcou com + Vitrine. É esta lista que vai para a página pública do celular, não o ranking inteiro.">Vitrine</button>
+  <button class="aba" data-painel="saude"
+    data-dica="Checagens que evitam perder venda: link que pode estar morto, produtos comprados juntos, tempo entre clique e compra, e seus alertas de preço.">Saúde</button>
+  <button class="aba" data-painel="alertas"
+    data-dica="O que mudou desde a coleta anterior: comissão que subiu ou caiu, preço que baixou, produto novo no topo e item que sumiu.">Mudanças</button>
+  <button class="aba" data-painel="ganhos"
+    data-dica="Dinheiro que você realmente recebeu, vindo do relatório de conversões da Shopee. Diferente do ranking, que mostra potencial.">Ganhos</button>
+  <button class="aba" data-painel="historico"
+    data-dica="Ranking somando todos os dias coletados, não só hoje. Serve para ver o que se mantém bom ao longo do tempo em vez de aparecer uma vez só.">Acumulado</button>
+  <button class="aba" data-painel="acoes"
+    data-dica="Executa os comandos do flow02 sem abrir o terminal: coletar, sincronizar, notificar, publicar. Mostra a saída ao vivo.">Ações</button>
+</nav>
+
+<main>
+
+<section id="painel-ranking" class="painel ativo">
+  <div class="titulo-secao">
+    <h2>Ranking do dia</h2>
+    <span class="legenda">Tudo que foi coletado hoje. Escolha o critério e monte sua seleção.</span>
+  </div>
+  <div class="atalhos" id="atalhos">
+    <button class="atalho ativo" data-ordenar="epc"
+      data-dica="Ordena por EPC = quanto você ganha por clique, em média.&#10;&#10;Combina a comissão com a chance estimada de a pessoa comprar. É o critério mais equilibrado: um produto que paga muito mas ninguém compra perde para um que paga menos e vende sempre.">
+      <b>Melhor retorno</b><span>comissão × chance de venda</span>
+    </button>
+    <button class="atalho" data-ordenar="vendas"
+      data-dica="Ordena pelo número de unidades já vendidas na Shopee.&#10;&#10;Mostra o que o público já comprova que compra. Cuidado: muito vendido costuma ser produto barato, com comissão baixa.">
+      <b>Mais vendidos do dia</b><span>maior volume</span>
+    </button>
+    <button class="atalho" data-ordenar="comissao"
+      data-dica="Ordena pelo valor em reais que entra no seu bolso a cada venda (preço × percentual).&#10;&#10;Cuidado: os que mais pagam costumam ser caros e vender pouco. Compare com a lista de mais vendidos.">
+      <b>Paga mais por venda</b><span>maior R$ no seu bolso</span>
+    </button>
+    <button class="atalho" data-ordenar="taxa"
+      data-dica="Ordena pelo percentual de comissão, ignorando o preço.&#10;&#10;Um produto de R$ 10 com 80% paga R$ 8; um de R$ 300 com 20% paga R$ 60. Percentual alto nem sempre é dinheiro alto.">
+      <b>Maior % de comissão</b><span>maior percentual</span>
+    </button>
+  </div>
+
+  <div class="filtros">
+    <label data-dica="Cada coleta grava um retrato do dia. Trocar o dia mostra o ranking como ele estava naquela data, sem apagar nada.">
+      Dia <select id="filtro-dia"></select>
+    </label>
+    <label data-dica="Filtra a origem dos produtos. A Shopee é automática pela API; o Mercado Livre só aparece se você importar o CSV manualmente, porque eles não têm API de afiliado.">
+      Plataforma
+      <select id="filtro-plataforma">
+        <option value="">todas</option>
+        <option value="shopee">Shopee</option>
+        <option value="mercadolivre">Mercado Livre</option>
+      </select>
+    </label>
+    <label data-dica="Quantos produtos exibir na lista. Não muda o que foi coletado, só o que aparece na tela.">
+      Mostrar <input type="number" id="filtro-limite" value="25" min="1" max="500">
+    </label>
+    <label data-dica="Filtra por parte do nome do produto ou da loja. Útil para achar um nicho: digite 'fone', 'cozinha', 'infantil'.">
+      Buscar <input type="search" id="filtro-busca" placeholder="nome ou loja">
+    </label>
+    <label data-dica="Marca o canal dentro do link (campo utm_content), sem mudar seu ID de afiliado.&#10;&#10;Depois, no relatório de conversões, você descobre se a venda veio do TikTok ou do Instagram — em vez de dividir esforço no escuro.&#10;&#10;Com 'link simples' nenhuma chamada extra é feita à API.">
+      Divulgar em
+      <select id="filtro-canal">
+        <option value="">link simples</option>
+        <option value="tiktok">TikTok</option>
+        <option value="instagram">Instagram</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="telegram">Telegram</option>
+        <option value="facebook">Facebook</option>
+        <option value="youtube">YouTube</option>
+        <option value="__outro">outro…</option>
+      </select>
+    </label>
+    <label id="rotulo-canal-livre" hidden
+      data-dica="Nome livre para o canal, quando não é uma rede da lista. Use algo curto e sem espaço: grupo-vip, lista-clientes, stories-quinta.">
+      Nome do canal
+      <input type="text" id="filtro-subid" placeholder="ex: grupo-vip" maxlength="50">
+    </label>
+    <label class="caixa" data-dica="Impede que uma única loja domine o ranking, mostrando no máximo alguns itens por vendedor.&#10;&#10;Sem isso, uma loja com catálogo grande e comissão alta ocupa a lista inteira e você perde variedade.">
+      <input type="checkbox" id="filtro-diversificar" checked> Limitar por loja
+    </label>
+    <label data-dica="Oportunidade = todos os critérios avaliados batendo ao mesmo tempo: paga bem, EPC no topo do dia, vendendo, disponível e sem desconto inflado.&#10;&#10;Sinal isolado engana: um produto pode ter desconto enorme e comissão de centavos, ou pagar muito e não vender. O que identifica oportunidade é a coincidência.&#10;&#10;'Quase' inclui quem falha em um critério só — muitas vezes é algo que você avalia melhor que o programa.">
+      Oportunidade
+      <select id="filtro-oportunidades">
+        <option value="0">mostrar tudo</option>
+        <option value="quase">oportunidades + quase</option>
+        <option value="1">só oportunidades</option>
+      </select>
+    </label>
+    <label class="caixa" data-dica="Esconde produtos cujo 'desconto' é inflado — aqueles que sobem o preço antes de anunciar promoção.&#10;&#10;O flow02 compara o preço de hoje com a mediana dos últimos dias, em vez de confiar no percentual anunciado.">
+      <input type="checkbox" id="filtro-desconto"> Só desconto real
+    </label>
+    <label class="caixa" data-dica="Junta anúncios que são o mesmo produto em versões diferentes — 15ml e 30ml, kit de 1 e de 3, ou a mesma coisa em duas lojas.&#10;&#10;Sem isso um único produto ocupa várias vagas e o ranking parece variado sem ser. Fica o de melhor EPC, com a contagem de quantos representa.">
+      <input type="checkbox" id="filtro-variantes"> Juntar variantes
+    </label>
+    <label class="caixa" data-dica="Alterna entre cartões (com foto e botões) e tabela compacta. A tabela mostra mais itens de uma vez e é melhor para comparar números.">
+      <input type="checkbox" id="filtro-tabela"> Ver como tabela
+    </label>
+    <button class="secundario" id="btn-copiar-post"
+      data-dica="Copia a lista inteira já formatada para colar no WhatsApp, Telegram ou legenda: nome, preço, sua comissão e o link de cada item.&#10;&#10;Se você escolheu um canal em 'Divulgar em', os links saem marcados.">Copiar como post</button>
+    <button class="secundario" id="btn-lote-ranking"
+      data-dica="Gera uma imagem pronta para post de cada produto da lista e baixa tudo num arquivo .zip, junto com um .txt com as legendas e os roteiros de vídeo.&#10;&#10;Limite de 40 por vez.">Gerar artes em lote</button>
+  </div>
+
+  <details class="filtros-avancados" id="filtros-avancados">
+    <summary data-dica="Filtros numéricos. O mais útil é a comissão mínima: evita gastar esforço divulgando produto que paga centavos.">
+      Filtros de valor <span class="contador" id="contador-filtros"></span>
+    </summary>
+    <div class="filtros">
+      <label data-dica="Só produtos que pagam pelo menos este valor a cada venda.&#10;&#10;É o filtro mais importante: divulgar produto de R$ 1 de comissão custa o mesmo esforço que um de R$ 40.">
+        Comissão mín. R$
+        <input type="number" id="f-comissao-min" min="0" step="1" placeholder="ex: 10">
+      </label>
+      <label data-dica="Percentual mínimo de comissão, independente do preço.">
+        Comissão mín. %
+        <input type="number" id="f-taxa-min" min="0" max="100" step="1" placeholder="ex: 15">
+      </label>
+      <label data-dica="Preço mínimo do produto. Útil para evitar itens baratos demais, que costumam pagar pouco.">
+        Preço de R$
+        <input type="number" id="f-preco-min" min="0" step="1" placeholder="0">
+      </label>
+      <label data-dica="Preço máximo. Ajuste ao poder de compra do seu público — produto caro demais não converte.">
+        até R$
+        <input type="number" id="f-preco-max" min="0" step="1" placeholder="sem limite">
+      </label>
+      <label data-dica="Unidades já vendidas na Shopee. Serve como prova social: produto sem vendas é aposta.">
+        Vendas mín.
+        <input type="number" id="f-vendas-min" min="0" step="10" placeholder="ex: 100">
+      </label>
+      <label data-dica="Nota mínima dos compradores. Abaixo de 4.5 costuma gerar reclamação, e a reclamação sobra para quem indicou.">
+        Nota mín.
+        <input type="number" id="f-nota-min" min="0" max="5" step="0.1" placeholder="ex: 4.5">
+      </label>
+      <label data-dica="Filtra por nome da loja. Útil quando você já sabe que uma loja entrega bem.">
+        Loja
+        <input type="text" id="f-loja" placeholder="parte do nome" maxlength="60">
+      </label>
+      <label class="caixa" data-dica="Mostra apenas os produtos que você já curou na vitrine.">
+        <input type="checkbox" id="f-so-vitrine"> Só os da vitrine
+      </label>
+      <button class="secundario" id="btn-limpar-filtros"
+        data-dica="Zera todos os filtros de valor de uma vez.">Limpar</button>
+    </div>
+  </details>
+  <div id="cartoes-ranking" class="cartoes"></div>
+  <div id="resumo-ranking" class="resumo"></div>
+  <div id="area-ranking" class="lista"></div>
+</section>
+
+<section id="painel-vitrine" class="painel">
+  <div class="titulo-secao">
+    <h2>Sua vitrine</h2>
+    <span class="legenda">Os produtos que você escolheu divulgar — é esta lista que vai para a página pública.</span>
+  </div>
+  <div class="filtros">
+    <label data-dica="Agrupa a vitrine por tema: casa, beleza, presentes até R$ 50. Na página pública cada coleção vira uma seção separada.">
+      Coleção <select id="vitrine-colecao"><option value="">todas</option></select>
+    </label>
+    <label data-dica="Proporção das imagens geradas.&#10;&#10;4:5 é o formato do feed e dos Reels. 9:16 preenche a tela inteira no Stories e no TikTok. 1:1 é o quadrado clássico.">
+      Formato das artes
+      <select id="lote-formato">
+        <option value="1080x1350">Feed / Reels (4:5)</option>
+        <option value="1080x1920">Stories / TikTok (9:16)</option>
+        <option value="1080x1080">Quadrado (1:1)</option>
+      </select>
+    </label>
+    <button class="secundario" id="btn-vitrine-post"
+      data-dica="Copia só os produtos curados, formatados para colar direto numa mensagem ou legenda.">Copiar como post</button>
+    <button id="btn-lote-vitrine"
+      data-dica="Gera a arte de cada produto da vitrine e baixa tudo num .zip, com legendas e roteiros no mesmo pacote.">Gerar artes em lote</button>
+    <button class="secundario" id="btn-vitrine-recarregar"
+      data-dica="Busca de novo no banco. Use depois de curar produtos em outra aba ou de rodar uma coleta.">Recarregar</button>
+  </div>
+  <div id="resumo-vitrine" class="resumo"></div>
+  <div id="area-vitrine" class="lista"></div>
+</section>
+
+<section id="painel-saude" class="painel">
+  <div class="titulo-secao">
+    <h2>Saúde da operação</h2>
+    <span class="legenda">Checagens que evitam perder venda por link morto ou timing errado.</span>
+  </div>
+  <div class="filtros">
+    <label data-dica="Quantas vezes dois produtos precisam ter sido comprados juntos para a dupla ser considerada padrão.&#10;&#10;Com 1 você vê todas as duplas, inclusive coincidências. Com 2 ou mais, só o que se repetiu — mais confiável, porém precisa de volume.">
+      Repetições mínimas para virar padrão
+      <input type="number" id="saude-minimo" value="2" min="1" max="10">
+    </label>
+    <button class="secundario" id="btn-saude-recarregar"
+      data-dica="Refaz todas as checagens com os dados atuais do banco.">Recarregar</button>
+  </div>
+  <div id="area-saude"></div>
+</section>
+
+<section id="painel-alertas" class="painel">
+  <div class="titulo-secao">
+    <h2>O que mudou</h2>
+    <span class="legenda">Diferenças em relação à coleta anterior: comissão, preço, entradas e saídas.</span>
+  </div>
+  <div class="filtros">
+    <label data-dica="Compara este dia com a coleta imediatamente anterior. Precisa de pelo menos dois dias coletados para ter o que comparar.">
+      Dia <select id="alerta-dia"></select>
+    </label>
+    <button class="secundario" id="btn-recarregar-alertas"
+      data-dica="Recalcula as diferenças entre os dois dias.">Recarregar</button>
+  </div>
+  <div id="resumo-alertas" class="resumo"></div>
+  <div id="lista-alertas"></div>
+</section>
+
+<section id="painel-ganhos" class="painel">
+  <div class="titulo-secao">
+    <h2>Ganhos reais</h2>
+    <span class="legenda">Comissão que de fato entrou, vinda do relatório de conversões da Shopee.</span>
+  </div>
+  <div class="filtros">
+    <label data-dica="Janela de tempo das conversões. Comissão da Shopee leva semanas para ser validada, então períodos curtos mostram menos do que você realmente vai receber.">
+      Período
+      <select id="ganhos-dias">
+        <option value="7">7 dias</option>
+        <option value="30" selected>30 dias</option>
+        <option value="90">90 dias</option>
+        <option value="0">tudo</option>
+      </select>
+    </label>
+  </div>
+  <div id="cartoes-ganhos" class="cartoes"></div>
+  <div id="grafico-ganhos" class="grafico"></div>
+  <div class="tabela-area"><table id="tabela-ganhos"></table></div>
+
+  <section class="bloco-saude" id="bloco-canais">
+    <h3>Vendas por campanha</h3>
+    <p class="explicacao">Vem do campo <code>utmContent</code> do relatório da
+    Shopee — funciona para qualquer marcação, inclusive as que você criou fora
+    daqui, como campanhas de tráfego pago.</p>
+    <div id="area-canais"></div>
+  </section>
+
+  <section class="bloco-saude" id="bloco-compartilhados">
+    <h3>O que você divulgou</h3>
+    <p class="explicacao">Cada link que você gerou, com o canal, quando foi e o
+    que aconteceu depois. Gerar link não é divulgar — mas é o registro mais
+    próximo disso que existe.</p>
+    <div id="area-compartilhados"></div>
+  </section>
+</section>
+
+<section id="painel-historico" class="painel">
+  <div class="titulo-secao">
+    <h2>Acumulado</h2>
+    <span class="legenda">Somando todos os dias coletados — mostra o que se sustenta, não o que apareceu uma vez.</span>
+  </div>
+  <div id="resumo-historico" class="resumo"></div>
+  <div class="tabela-area"><table id="tabela-historico"></table></div>
+</section>
+
+<section id="painel-acoes" class="painel">
+  <div class="titulo-secao">
+    <h2>Ações</h2>
+    <span class="legenda">Roda os comandos do flow02 sem abrir o terminal, com a saída ao vivo.</span>
+  </div>
+  <div class="acoes-grade">
+    <div class="cartao-acao">
+      <h3>Coletar ofertas</h3>
+      <p>Busca produtos automaticamente, pontua e grava o snapshot do dia.</p>
+      <label data-dica="Quantos produtos buscar em cada consulta configurada.&#10;&#10;Mais produtos dão mais opções, mas a coleta demora mais e consome mais cota da API. 200 é um bom equilíbrio para uso diário.">
+        Quantos produtos por consulta
+        <select id="acao-quantidade">
+          <option value="">o que está no config</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+          <option value="500">500</option>
+          <option value="1000">1000</option>
+        </select>
+      </label>
+      <label data-dica="De onde coletar. A Shopee é automática pela API. O Mercado Livre depende do arquivo entrada/mercadolivre.csv, porque eles não oferecem API de afiliado.">
+        Plataforma
+        <select id="acao-plataforma">
+          <option value="">todas</option>
+          <option value="shopee">Shopee</option>
+          <option value="mercadolivre">Mercado Livre</option>
+        </select>
+      </label>
+      <label class="caixa"><input type="checkbox" id="acao-conversoes"> Incluir conversões (ganhos)</label>
+      <button data-comando="coletar" data-dica="Consulta a API da Shopee, pontua cada produto e grava o retrato do dia.&#10;&#10;E o comando principal: sem ele nao ha dado novo. Leva de alguns segundos a poucos minutos, conforme a quantidade.">Executar</button>
+    </div>
+    <div class="cartao-acao">
+      <h3>Recalibrar CVR</h3>
+      <p>Recalcula a conversão medida a partir das conversões coletadas.</p>
+      <button data-comando="calibrar" data-dica="Recalcula a taxa de conversao usando dados reais em vez de heuristica.&#10;&#10;Depende de cliques, que a API da Shopee nao fornece -- so funciona depois de publicar o redirecionador no Netlify.">Executar</button>
+    </div>
+    <div class="cartao-acao">
+      <h3>Importar cliques</h3>
+      <p>Traz do Firebase os cliques contados pelo redirecionador. Só funciona
+      depois de publicar no Netlify.</p>
+      <label class="caixa"><input type="checkbox" id="acao-por-canal"> Só ver o relatório por canal</label>
+      <button data-comando="cliques" data-dica="Traz do Firebase os cliques contados pelo redirecionador e grava no banco.&#10;&#10;E o que destrava a conversao medida. Sem o Netlify publicado, nao ha o que importar.">Executar</button>
+    </div>
+    <div class="cartao-acao">
+      <h3>Gerar página pública</h3>
+      <p>Monta a página que lê o Firebase, para abrir no celular ou publicar.</p>
+      <label class="caixa"><input type="checkbox" id="acao-netlify"> Pacote do Netlify</label>
+      <button data-comando="publicar" data-dica="Gera a pagina estatica que le o Firebase, para abrir no celular ou hospedar.&#10;&#10;Com a opcao Netlify, monta tambem a pasta de deploy com o redirecionador.">Executar</button>
+    </div>
+    <div class="cartao-acao">
+      <h3>Listar categorias</h3>
+      <p>Mostra os ids de categoria vistos, para configurar a varredura no
+      config.toml.</p>
+      <button data-comando="categorias" data-dica="Lista os ids de categoria que ja apareceram nas coletas.&#10;&#10;Serve para configurar a varredura por categoria no config.toml e ampliar o alcance da busca.">Executar</button>
+    </div>
+    <div class="cartao-acao">
+      <h3>Enviar no Telegram</h3>
+      <p>Manda o top do dia ou só as mudanças.</p>
+      <label data-dica="O que mandar: o ranking do dia inteiro, ou só o que mudou desde a coleta anterior.&#10;&#10;Para uso diário, 'mudanças' costuma ser mais útil — evita repetir os mesmos produtos todo dia.">
+        Conteúdo
+        <select id="acao-tipo">
+          <option value="top">top do dia</option>
+          <option value="alertas">mudanças</option>
+        </select>
+      </label>
+      <button data-comando="notificar" data-dica="Envia o resultado para o seu Telegram. Precisa do token do bot no .env e do chat_id no config.toml.">Executar</button>
+    </div>
+    <div class="cartao-acao">
+      <h3>Sincronizar Firebase</h3>
+      <p>Espelha o ranking do dia no Realtime Database.</p>
+      <button data-comando="sincronizar" data-dica="Envia ranking, ganhos e vitrine para o Firebase, de onde a pagina do celular le.&#10;&#10;Tambem publica os codigos de rastreio usados pelo redirecionador.">Executar</button>
+    </div>
+    <div class="cartao-acao">
+      <h3>Diagnóstico</h3>
+      <p>Verifica credenciais e o estado real das APIs.</p>
+      <button data-comando="doctor" data-dica="Verifica credenciais, banco, conexao com a Shopee, Telegram e Firebase.&#10;&#10;Rode isto primeiro sempre que algo parecer errado: ele diz exatamente o que esta faltando.">Executar</button>
+    </div>
+  </div>
+
+  <div class="console-area">
+    <div class="console-cabecalho">
+      <span id="console-titulo">Nenhuma tarefa executada</span>
+      <button class="perigo" id="btn-cancelar" hidden>Cancelar</button>
+    </div>
+    <pre id="console"></pre>
+  </div>
+</section>
+
+</main>
+
+<div id="modal-arte" class="modal" hidden>
+  <div class="modal-caixa">
+    <div class="modal-topo">
+      <h3 id="arte-titulo">Arte da campanha</h3>
+      <button class="secundario" id="arte-fechar"
+        data-dica="Fecha sem baixar nada. Também funciona com a tecla Esc ou clicando fora da janela.">Fechar</button>
+    </div>
+    <div class="modal-corpo">
+      <div class="arte-previa">
+        <canvas id="arte-canvas" width="1080" height="1350"></canvas>
+      </div>
+      <div class="arte-lado">
+        <label data-dica="Proporção da imagem. 4:5 para feed e Reels, 9:16 para Stories e TikTok, 1:1 para o quadrado clássico. A prévia muda na hora.">
+          Formato
+          <select id="arte-formato">
+            <option value="1080x1350">Feed / Reels (4:5)</option>
+            <option value="1080x1920">Stories / TikTok (9:16)</option>
+            <option value="1080x1080">Quadrado (1:1)</option>
+          </select>
+        </label>
+        <button id="arte-baixar"
+          data-dica="Baixa a imagem em 1080px de largura, pronta para postar. A composição é feita no seu navegador — nada é enviado para servidor nenhum.">Baixar imagem PNG</button>
+
+        <div class="arte-marca">
+          <label data-dica="Seu @ ou nome, impresso acima da chamada.&#10;&#10;Conteúdo com identidade constrói marca. Sem ela você compete só por preço, e sempre vai existir quem poste mais barato.">
+            Sua assinatura
+            <input type="text" id="arte-assinatura" maxlength="40" placeholder="@seuperfil">
+          </label>
+          <label data-dica="Texto do botão no rodapé da arte. Ajuste ao canal: 'LINK NA BIO' no Instagram, 'LINK NA DESCRIÇÃO' no TikTok, 'LINK NOS COMENTÁRIOS' no Facebook.">
+            Chamada
+            <input type="text" id="arte-chamada" maxlength="34" placeholder="LINK NA DESCRIÇÃO">
+          </label>
+        </div>
+
+        <label data-dica="Texto pronto para colar na legenda do post: nome, preço, desconto, prova social, link e hashtags.&#10;&#10;Pode editar aqui antes de copiar — texto com a sua voz converte mais que texto genérico.">
+          Legenda pronta
+          <textarea id="arte-legenda" rows="10"></textarea>
+        </label>
+        <button class="secundario" id="arte-copiar-legenda"
+          data-dica="Copia a legenda como está no campo acima, incluindo suas edições.">Copiar legenda</button>
+
+        <label data-dica="Roteiro cronometrado para gravar vídeo, com os números deste produto já preenchidos.&#10;&#10;O gancho dos 3 primeiros segundos muda conforme o tamanho do desconto — é o trecho que decide se a pessoa continua assistindo.">
+          Roteiro para vídeo
+          <textarea id="arte-roteiro" rows="9"></textarea>
+        </label>
+        <button class="secundario" id="arte-copiar-roteiro"
+          data-dica="Copia o roteiro para você ler enquanto grava.">Copiar roteiro</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="aviso" class="aviso" hidden></div>
+<script src="/estatico/dicas.js"></script>
+<script src="/estatico/zip.js"></script>
+<script src="/estatico/arte.js"></script>
+<script src="/estatico/app.js"></script>
+</body>
+</html>

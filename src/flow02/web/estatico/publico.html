@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flow02 — ofertas</title>
+<meta name="theme-color" content="#171a23">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2358b0f5'/><rect x='7' y='18' width='4' height='7' fill='%230f1117'/><rect x='14' y='12' width='4' height='13' fill='%230f1117'/><rect x='21' y='7' width='4' height='18' fill='%230f1117'/></svg>">
+<!--
+  Pagina autocontida: le o Firebase Realtime Database pela API REST.
+
+  Nao usa o SDK do Firebase de proposito. O SDK exige npm, e o registry do npm
+  esta bloqueado nesta rede (403), do mesmo jeito que o PyPI. A REST da RTDB
+  faz tudo o que essa tela precisa com `fetch`, entao o arquivo funciona
+  aberto direto do disco, no celular ou hospedado em qualquer lugar.
+
+  Os valores abaixo sao preenchidos por `flow02 publicar`.
+-->
+<style>
+:root {
+  --fundo:#0b0c0f; --superficie:#131519; --alta:#1a1d23;
+  --borda:#22262e; --borda-forte:#2f3540;
+  --texto:#f2f3f5; --medio:#9ba1ac; --fraco:#6b7280;
+  --destaque:#6ea8fe; --destaque-fraco:rgba(110,168,254,.12);
+  --ok:#56d4a0; --ok-fraco:rgba(86,212,160,.12);
+  --perigo:#f87171; --alerta:#f0b429;
+  --e2:8px; --e3:12px; --e4:16px; --e5:24px;
+  --r:8px; --rg:14px;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { margin:0; background:var(--fundo); color:var(--texto);
+  font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding-bottom:40px; -webkit-font-smoothing:antialiased; }
+:focus-visible { outline:2px solid var(--destaque); outline-offset:2px; }
+
+header { position:sticky; top:0; z-index:5; background:var(--superficie);
+  border-bottom:1px solid var(--borda); padding:12px 16px; }
+.topo { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.marca { font-weight:650; font-size:17px; letter-spacing:-.2px;
+  display:flex; align-items:center; gap:9px; }
+.marca::before { content:""; width:18px; height:18px; border-radius:5px;
+  background:linear-gradient(135deg,var(--destaque),var(--ok)); }
+.marca span { color:var(--fraco); font-weight:400; font-size:13px; }
+.controles { display:flex; gap:8px; margin-top:11px; flex-wrap:wrap; }
+select, input, button { background:var(--alta); border:1px solid var(--borda);
+  color:var(--texto); border-radius:8px; padding:9px 12px; font-size:14px;
+  font-family:inherit; transition:border-color .12s; }
+select:hover, input:hover { border-color:var(--borda-forte); }
+button { background:var(--destaque); color:#08111d; border:none; font-weight:620; cursor:pointer;
+  transition:filter .12s, transform .06s; }
+button:hover { filter:brightness(1.12); }
+button:active { transform:scale(.97); }
+button.plano { background:var(--alta); color:var(--texto); border:1px solid var(--borda);
+  font-weight:500; }
+button.plano:hover { filter:none; border-color:var(--borda-forte); }
+
+.abas { display:flex; gap:6px; margin-top:11px; }
+.abas button { flex:1; background:none; border:1px solid var(--borda); color:var(--fraco);
+  font-weight:520; padding:8px; }
+.abas button.ativa { background:var(--destaque-fraco); color:var(--destaque);
+  border-color:var(--destaque); font-weight:620; }
+
+main { padding:16px; max-width:820px; margin:0 auto; }
+
+.resumo { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:var(--e2); margin-bottom:var(--e4); }
+.chip { background:var(--superficie); border-radius:var(--rg); padding:var(--e3) var(--e4); }
+.chip .r { font-size:13px; color:var(--fraco); }
+.chip .v { font-size:22px; font-weight:600; margin-top:4px;
+  font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+.chip .v.destaque { color:var(--destaque); }
+.chip .v.positivo { color:var(--ok); }
+
+.item { background:var(--superficie); border:1px solid transparent; border-radius:var(--rg);
+  padding:var(--e4); margin-bottom:var(--e2); display:flex; gap:var(--e3);
+  transition:border-color .15s; }
+.item:hover { border-color:var(--borda-forte); }
+.posicao { font-size:15px; font-weight:600; color:var(--fraco); min-width:22px;
+  text-align:center; font-variant-numeric:tabular-nums; padding-top:1px; }
+.item.topo .posicao { color:var(--destaque); }
+.corpo { flex:1; min-width:0; }
+.nome { font-weight:500; font-size:15px; line-height:1.4; overflow-wrap:anywhere; }
+.meta { display:flex; gap:var(--e2); flex-wrap:wrap; margin-top:5px;
+  font-size:13px; color:var(--fraco); }
+.meta span:not(:last-child)::after { content:"·"; margin-left:var(--e2); color:var(--borda-forte); }
+.meta .off { color:var(--alerta); }
+.meta .ruim { color:var(--perigo); }
+.numeros { display:flex; gap:var(--e5); margin-top:var(--e3); }
+.bloco .n { font-size:17px; font-weight:600; letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums; }
+.bloco .n.dinheiro { color:var(--ok); }
+.bloco .n.epc { color:var(--destaque); }
+.bloco .l { font-size:12px; color:var(--fraco); margin-top:2px; }
+.acoes { display:flex; gap:var(--e2); margin-top:var(--e3); }
+.acoes button, .acoes a { flex:1; text-align:center; text-decoration:none;
+  padding:9px; border-radius:var(--r); font-size:13px; font-weight:600;
+  background:var(--alta); color:var(--medio); border:1px solid var(--borda); }
+.acoes a { background:var(--destaque); color:#06121f; border-color:transparent; }
+.acoes button.feito { color:var(--ok); border-color:var(--ok); }
+.foto { width:52px; height:52px; border-radius:var(--r); object-fit:cover;
+  background:var(--alta); flex-shrink:0; }
+.titulo-colecao { font-size:13px; color:var(--fraco); text-transform:uppercase;
+  letter-spacing:.5px; font-weight:600; margin:var(--e5) 0 var(--e2); }
+.titulo-colecao:first-child { margin-top:0; }
+
+.captura { margin-top:var(--e5); padding:var(--e5); border-radius:var(--rg);
+  background:var(--superficie); border:1px solid var(--borda); }
+.captura-texto b { display:block; font-size:16px; margin-bottom:4px; }
+.captura-texto { color:var(--fraco); font-size:14px; margin-bottom:var(--e4); }
+.captura form { display:flex; flex-direction:column; gap:var(--e3); }
+.captura input[type=text] { width:100%; }
+.aceite { display:flex; gap:var(--e2); align-items:flex-start;
+  font-size:12.5px; color:var(--fraco); line-height:1.45; cursor:pointer; }
+.aceite input { margin-top:2px; accent-color:var(--destaque); flex-shrink:0; }
+.captura .ok { color:var(--ok); font-size:14px; }
+
+.aviso { position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
+  background:var(--alta); border:1px solid var(--borda-forte); padding:11px 20px;
+  border-radius:9px; font-size:13px; font-weight:500;
+  box-shadow:0 8px 28px rgba(0,0,0,.5); animation:subir .18s ease-out; }
+@keyframes subir { from { opacity:0; transform:translate(-50%,10px); }
+  to { opacity:1; transform:translate(-50%,0); } }
+
+.estado { padding:44px 20px; text-align:center; color:var(--fraco);
+  border:1px dashed var(--borda); border-radius:12px; }
+.estado b { color:var(--texto); display:block; margin-bottom:7px; font-size:15px; }
+.estado code { background:var(--alta); padding:2px 7px; border-radius:4px;
+  font-family:var(--mono); font-size:12px; color:var(--destaque); }
+
+.esqueleto { display:flex; flex-direction:column; gap:10px; }
+.esqueleto div { height:96px; border-radius:12px;
+  background:linear-gradient(90deg,var(--superficie) 25%,var(--alta) 50%,var(--superficie) 75%);
+  background-size:300% 100%; animation:brilho 1.3s ease-in-out infinite; }
+@keyframes brilho { from { background-position:150% 0; } to { background-position:-150% 0; } }
+
+.login { max-width:340px; margin:60px auto; display:flex; flex-direction:column; gap:10px; }
+.login input { width:100%; }
+.erro { color:var(--perigo); font-size:13px; }
+
+table { width:100%; border-collapse:collapse; font-size:13px;
+  background:var(--superficie); border:1px solid var(--borda); border-radius:10px;
+  overflow:hidden; }
+th,td { padding:9px 8px; border-bottom:1px solid var(--borda); text-align:right;
+  font-variant-numeric:tabular-nums; }
+th:first-child, td:first-child { text-align:left; }
+th { color:var(--fraco); font-weight:620; font-size:11px; text-transform:uppercase;
+  letter-spacing:.4px; background:var(--alta); }
+tbody tr:last-child td { border-bottom:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="topo">
+    <div class="marca">flow02 <span>ofertas</span></div>
+    <button class="plano" id="btn-atualizar">Atualizar</button>
+  </div>
+  <div class="controles">
+    <select id="dia"></select>
+    <select id="plataforma"><option value="">todas</option></select>
+  </div>
+  <div class="abas">
+    <button class="ativa" data-aba="vitrine">Seleção</button>
+    <button data-aba="ranking">Ranking</button>
+    <button data-aba="ganhos">Ganhos</button>
+  </div>
+</header>
+
+<main>
+  <div id="conteudo"><div class="esqueleto"><div></div><div></div><div></div></div></div>
+
+  <!--
+    Captura de contato. Audiencia propria vale mais que alcance emprestado,
+    porque nao depende do algoritmo de ninguem.
+
+    LGPD: a lei exige finalidade declarada, consentimento explicito e forma de
+    sair. Por isso o texto e claro, o aceite e obrigatorio e nao ha marcacao
+    previa. Nao colete mais dado do que precisa.
+  -->
+  <section class="captura" id="captura" hidden>
+    <div class="captura-texto">
+      <b>Receba os achados antes</b>
+      Deixe seu contato e eu aviso quando aparecer oferta boa de verdade.
+    </div>
+    <form id="form-contato">
+      <input type="text" id="contato-valor" required maxlength="120"
+             placeholder="seu e-mail ou WhatsApp com DDD"
+             autocomplete="email">
+      <label class="aceite">
+        <input type="checkbox" id="contato-aceite" required>
+        <span>Autorizo o contato para receber ofertas. Posso pedir a remoção
+        a qualquer momento.</span>
+      </label>
+      <button type="submit" id="contato-enviar">Quero receber</button>
+      <div class="erro" id="contato-erro"></div>
+    </form>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const CONFIG = {
+  databaseUrl: "__DATABASE_URL__",
+  apiKey: "__API_KEY__",
+  raiz: "__RAIZ__",
+};
+
+const $ = (id) => document.getElementById(id);
+const CHAVE_TOKEN = "flow02_token";
+let dados = { ranking: [], resumo: null, ganhos: [], vitrine: [] };
+let abaAtual = "vitrine";
+
+const moeda = (v) => (v ?? 0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+const numero = (v, c = 0) => (v ?? 0).toLocaleString("pt-BR",
+  { minimumFractionDigits:c, maximumFractionDigits:c });
+
+function avisar(texto) {
+  const caixa = document.createElement("div");
+  caixa.className = "aviso";
+  caixa.textContent = texto;
+  document.body.appendChild(caixa);
+  setTimeout(() => caixa.remove(), 2600);
+}
+
+function escapar(texto) {
+  const div = document.createElement("div");
+  div.textContent = texto ?? "";
+  return div.innerHTML;
+}
+
+function cartoes(lista) {
+  return '<div class="resumo">' + lista.map((c) =>
+    `<div class="chip"><div class="r">${c.r}</div>`
+    + `<div class="v ${c.c || ""}">${c.v}</div></div>`
+  ).join("") + "</div>";
+}
+
+function esqueleto(blocos = 3) {
+  $("conteudo").innerHTML =
+    `<div class="esqueleto">${"<div></div>".repeat(blocos)}</div>`;
+}
+
+// ------------------------------------------------------------ acesso RTDB
+
+function url(caminho, extra = "") {
+  const token = sessionStorage.getItem(CHAVE_TOKEN);
+  const parametros = [extra, token ? `auth=${encodeURIComponent(token)}` : ""]
+    .filter(Boolean).join("&");
+  return `${CONFIG.databaseUrl}/${caminho}.json${parametros ? "?" + parametros : ""}`;
+}
+
+async function ler(caminho, extra = "") {
+  const resposta = await fetch(url(caminho, extra));
+  if (resposta.status === 401) throw new Error("SEM_AUTORIZACAO");
+  if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+  return resposta.json();
+}
+
+async function entrar(email, senha) {
+  const resposta = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${CONFIG.apiKey}`,
+    { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ email, password: senha, returnSecureToken: true }) });
+  const corpo = await resposta.json();
+  if (!resposta.ok || !corpo.idToken) {
+    throw new Error(corpo.error?.message || "falha no login");
+  }
+  sessionStorage.setItem(CHAVE_TOKEN, corpo.idToken);
+}
+
+function pedirLogin(mensagem = "") {
+  $("conteudo").innerHTML = `
+    <form class="login" id="form-login">
+      <div class="estado" style="border:none;padding:0 0 8px">
+        <b>Entrar</b>As regras do banco exigem autenticação.
+      </div>
+      <input type="email" id="email" placeholder="e-mail" required autocomplete="username">
+      <input type="password" id="senha" placeholder="senha" required autocomplete="current-password">
+      <button type="submit">Entrar</button>
+      <div class="erro" id="erro-login">${escapar(mensagem)}</div>
+    </form>`;
+  $("form-login").addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    try {
+      await entrar($("email").value, $("senha").value);
+      carregar();
+    } catch (erro) {
+      $("erro-login").textContent = erro.message;
+    }
+  });
+}
+
+// -------------------------------------------------------------- carregamento
+
+async function carregarDias() {
+  const chaves = await ler(`${CONFIG.raiz}/ranking`, "shallow=true");
+  const dias = Object.keys(chaves || {}).sort().reverse();
+  $("dia").innerHTML = dias.map((d) => `<option value="${d}">${d}</option>`).join("")
+    || '<option value="">nenhum dia</option>';
+  return dias;
+}
+
+async function carregar() {
+  esqueleto();
+  try {
+    const dias = await carregarDias();
+    if (!dias.length) {
+      $("conteudo").innerHTML = '<div class="estado"><b>Nada publicado ainda</b>'
+        + 'Rode <code>flow02 coletar</code> e depois <code>flow02 sincronizar</code>.</div>';
+      return;
+    }
+    const dia = $("dia").value || dias[0];
+    $("dia").value = dia;
+
+    const [ranking, resumo, ganhos, vitrine] = await Promise.all([
+      ler(`${CONFIG.raiz}/ranking/${dia}`),
+      ler(`${CONFIG.raiz}/resumo/${dia}`),
+      ler(`${CONFIG.raiz}/ganhos`),
+      ler(`${CONFIG.raiz}/vitrine`),
+    ]);
+
+    // A vitrine vem agrupada por colecao; achata mantendo a ordem curada.
+    dados.vitrine = Object.entries(vitrine || {}).flatMap(([colecao, itens]) =>
+      Object.values(itens || {})
+        .sort((a, b) => (a.posicao ?? 0) - (b.posicao ?? 0))
+        .map((item) => ({ ...item, colecao }))
+    );
+
+    const plataformas = Object.keys(ranking || {});
+    $("plataforma").innerHTML = '<option value="">todas</option>'
+      + plataformas.map((p) => `<option value="${p}">${p}</option>`).join("");
+
+    const filtro = $("plataforma").value;
+    dados.ranking = plataformas
+      .filter((p) => !filtro || p === filtro)
+      .flatMap((p) => Object.values(ranking[p] || {}).map((i) => ({ ...i, plataforma: p })))
+      .sort((a, b) => (b.epc ?? 0) - (a.epc ?? 0));
+    dados.resumo = resumo;
+    dados.ganhos = Object.values(ganhos || {}).sort((a, b) => (b.dia || "").localeCompare(a.dia || ""));
+
+    desenhar();
+  } catch (erro) {
+    if (erro.message === "SEM_AUTORIZACAO") {
+      pedirLogin(sessionStorage.getItem(CHAVE_TOKEN) ? "sessão expirada" : "");
+      return;
+    }
+    $("conteudo").innerHTML = `<div class="estado"><b>Não consegui ler o banco</b>
+      ${escapar(erro.message)}<br><br>Confira se a URL do Realtime Database está certa
+      e se as regras permitem leitura.</div>`;
+  }
+}
+
+// ------------------------------------------------------------------ desenho
+
+function desenhar() {
+  if (abaAtual === "ganhos") return desenharGanhos();
+  if (abaAtual === "vitrine") return desenharVitrine();
+  return desenharRanking();
+}
+
+function desenharVitrine() {
+  if (!dados.vitrine.length) {
+    $("conteudo").innerHTML = '<div class="estado"><b>Nenhuma seleção publicada</b>'
+      + "No painel, marque produtos com <code>+ Vitrine</code> e rode "
+      + "<code>flow02 sincronizar</code>.</div>";
+    return;
+  }
+  const total = dados.vitrine.reduce((s, i) => s + (i.comissao_valor ?? 0), 0);
+  const colecoes = [...new Set(dados.vitrine.map((i) => i.colecao))];
+  const chips = cartoes([
+    { r: "Produtos", v: String(dados.vitrine.length) },
+    { r: "Coleções", v: String(colecoes.length) },
+    { r: "Comissão somada", v: moeda(total), c: "positivo" },
+  ]);
+
+  let colecaoAtual = null;
+  const blocos = dados.vitrine.map((item, indice) => {
+    const cabecalho = item.colecao !== colecaoAtual
+      ? `<div class="titulo-colecao">${escapar(item.colecao)}</div>` : "";
+    colecaoAtual = item.colecao;
+    return cabecalho + cartaoProduto(item, indice + 1);
+  }).join("");
+
+  $("conteudo").innerHTML = chips + blocos;
+}
+
+function desenharRanking() {
+  if (!dados.ranking.length) {
+    $("conteudo").innerHTML = '<div class="estado">Nenhuma oferta nesse dia.</div>';
+    return;
+  }
+  const total = dados.ranking.reduce((s, i) => s + (i.comissao_valor ?? 0), 0);
+  const melhor = Math.max(...dados.ranking.map((i) => i.epc ?? 0), 0);
+  const chips = cartoes([
+    { r: "Ofertas", v: String(dados.ranking.length) },
+    { r: "Melhor EPC", v: numero(melhor, 4), c: "destaque" },
+    { r: "Comissão somada", v: moeda(total), c: "positivo" },
+    ...(dados.resumo?.atualizado_em
+      ? [{ r: "Atualizado", v: String(dados.resumo.atualizado_em).slice(11, 16) }] : []),
+  ]);
+
+  const itens = dados.ranking
+    .map((item, indice) => cartaoProduto(item, indice + 1))
+    .join("");
+
+  $("conteudo").innerHTML = chips + itens;
+}
+
+/** Cartão usado nas duas abas de produto: seleção e ranking. */
+function cartaoProduto(item, posicao) {
+  const meta = [
+    escapar(item.loja || ""),
+    item.vendas ? `${numero(item.vendas)} vendidos` : "",
+    item.rating ? `${numero(item.rating, 1)} de nota` : "",
+    item.desconto_pct ? `<span class="off">${numero(item.desconto_pct)}% OFF</span>` : "",
+  ].filter(Boolean).map((t) => `<span>${t}</span>`).join("");
+
+  const foto = item.imagem
+    ? `<img class="foto" src="${escapar(item.imagem)}" alt="" loading="lazy">` : "";
+
+  return `<div class="item ${posicao <= 3 ? "topo" : ""}">
+    <div class="posicao">${posicao}</div>
+    ${foto}
+    <div class="corpo">
+      <div class="nome">${escapar(item.nome)}</div>
+      <div class="meta">${meta}</div>
+      <div class="numeros">
+        <div class="bloco"><div class="n">${moeda(item.preco)}</div>
+          <div class="l">preço</div></div>
+        <div class="bloco"><div class="n dinheiro">${moeda(item.comissao_valor)}</div>
+          <div class="l">por venda</div></div>
+        <div class="bloco"><div class="n epc">${numero(item.epc, 4)}</div>
+          <div class="l">EPC</div></div>
+      </div>
+      <div class="acoes">
+        ${item.link ? `<a href="${escapar(item.link)}" target="_blank" rel="noopener noreferrer">Abrir</a>` : ""}
+        <button data-link="${encodeURIComponent(item.link || "")}">Copiar link</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function desenharGanhos() {
+  if (!dados.ganhos.length) {
+    $("conteudo").innerHTML = '<div class="estado"><b>Sem conversões</b>'
+      + 'Rode <code>flow02 coletar --com-conversoes</code> e sincronize.</div>';
+    return;
+  }
+  const soma = (campo) => dados.ganhos.reduce((s, g) => s + (g[campo] ?? 0), 0);
+  const cliques = soma("cliques");
+  const chips = cartoes([
+    { r: "Comissão", v: moeda(soma("comissao")), c: "positivo" },
+    { r: "Cliques", v: numero(cliques) },
+    { r: "Pedidos", v: numero(soma("pedidos")) },
+    { r: "Conversão", v: `${cliques ? (soma("pedidos") / cliques * 100).toFixed(2) : "0"}%`,
+      c: "destaque" },
+  ]);
+  const linhas = dados.ganhos.map((g) => `<tr>
+    <td>${escapar(g.dia)}</td><td>${escapar(g.plataforma || "")}</td>
+    <td>${numero(g.cliques)}</td><td>${numero(g.pedidos)}</td>
+    <td>${moeda(g.comissao)}</td>
+    <td>${g.validada ? "validada" : "estimada"}</td></tr>`).join("");
+  $("conteudo").innerHTML = chips + `<table>
+    <thead><tr><th>Dia</th><th>Plataforma</th><th>Cliques</th>
+    <th>Pedidos</th><th>Comissão</th><th>Tipo</th></tr></thead>
+    <tbody>${linhas}</tbody></table>`;
+}
+
+// ------------------------------------------------------------ captura
+
+/** Grava o contato no Firebase. Escrita cega: as regras devem negar leitura. */
+async function enviarContato(valor) {
+  const chave = String(Date.now()) + Math.random().toString(36).slice(2, 8);
+  const resposta = await fetch(url(`${CONFIG.raiz}/contatos/${chave}`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contato: valor.slice(0, 120),
+      em: new Date().toISOString(),
+      origem: location.hostname || "local",
+      consentiu: true,
+    }),
+  });
+  if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+}
+
+function ligarCaptura() {
+  const secao = $("captura");
+  if (!secao) return;
+  secao.hidden = false;
+
+  if (localStorage.getItem("flow02_contato_enviado")) {
+    secao.innerHTML = '<div class="captura-texto ok">Contato registrado. '
+      + "Obrigado.</div>";
+    return;
+  }
+
+  $("form-contato").addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const valor = $("contato-valor").value.trim();
+    const erro = $("contato-erro");
+    if (valor.length < 8) {
+      erro.textContent = "informe um e-mail ou telefone válido";
+      return;
+    }
+    const botao = $("contato-enviar");
+    botao.disabled = true;
+    botao.textContent = "enviando…";
+    try {
+      await enviarContato(valor);
+      localStorage.setItem("flow02_contato_enviado", "1");
+      secao.innerHTML = '<div class="captura-texto ok">Pronto. '
+        + "Você recebe os próximos achados.</div>";
+    } catch (falha) {
+      erro.textContent = `não consegui registrar (${falha.message}). `
+        + "As regras do banco precisam permitir escrita em /contatos.";
+      botao.disabled = false;
+      botao.textContent = "Quero receber";
+    }
+  });
+}
+
+// ------------------------------------------------------------------ eventos
+
+$("btn-atualizar").addEventListener("click", carregar);
+$("dia").addEventListener("change", carregar);
+$("plataforma").addEventListener("change", carregar);
+
+document.querySelector(".abas").addEventListener("click", (evento) => {
+  const botao = evento.target.closest("button");
+  if (!botao) return;
+  document.querySelectorAll(".abas button").forEach((b) => b.classList.remove("ativa"));
+  botao.classList.add("ativa");
+  abaAtual = botao.dataset.aba;
+  desenhar();
+});
+
+document.addEventListener("click", (evento) => {
+  const botao = evento.target.closest("[data-link]");
+  if (!botao) return;
+  const link = decodeURIComponent(botao.dataset.link);
+  if (!link) return avisar("sem link");
+  navigator.clipboard.writeText(link)
+    .then(() => {
+      const original = botao.textContent;
+      botao.textContent = "Copiado";
+      botao.classList.add("feito");
+      setTimeout(() => {
+        botao.textContent = original;
+        botao.classList.remove("feito");
+      }, 1400);
+    })
+    .catch(() => avisar("não foi possível copiar"));
+});
+
+if (CONFIG.databaseUrl.startsWith("__")) {
+  $("conteudo").innerHTML = '<div class="estado"><b>Página não configurada</b>'
+    + 'Gere a versão pronta com <code>flow02 publicar</code>.</div>';
+} else {
+  carregar();
+  ligarCaptura();
+}
+</script>
+</body>
+</html>

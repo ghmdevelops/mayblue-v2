@@ -1,0 +1,5 @@
+item_id;nome;preco;taxa_comissao;categoria;vendas;rating;desconto_pct;link_oferta;loja_nome
+MLB19876543;Cadeira Gamer XP Reclinavel;899.90;;casa;420;4.7;15;https://mercadolivre.com/sec/aaa;Loja XP
+MLB11122233;Fone Bluetooth ANC Pro;249.00;;eletronicos;3100;4.5;30;https://mercadolivre.com/sec/bbb;AudioBR
+MLB55566677;Camiseta Algodao Premium;79.90;;moda;850;4.8;10;https://mercadolivre.com/sec/ccc;ModaTop
+MLB99988877;Notebook 16GB SSD 512;3899.00;;informatica;42;4.6;5;https://mercadolivre.com/sec/ddd;TechStore

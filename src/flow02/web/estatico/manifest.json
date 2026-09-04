@@ -1,0 +1,19 @@
+{
+  "name": "flow02 — curadoria de ofertas",
+  "short_name": "flow02",
+  "description": "Encontra os produtos de afiliado com maior retorno esperado e monta a vitrine pronta para divulgar.",
+  "start_url": ".",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0c11",
+  "theme_color": "#0a0c11",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/estatico/icone.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

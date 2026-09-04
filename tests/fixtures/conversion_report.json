@@ -1,0 +1,78 @@
+{
+  "_origem": "resposta real do conversionReport, capturada em 2026-09-04",
+  "data": {
+    "conversionReport": {
+      "nodes": [
+        {
+          "conversionId": 241910164178986,
+          "purchaseTime": 1788210965,
+          "clickTime": 1788205738,
+          "conversionStatus": "PENDING",
+          "totalCommission": "0.59985",
+          "netCommission": "0.59985",
+          "estimatedTotalCommission": "0.59985",
+          "utmContent": "",
+          "orders": [
+            {
+              "orderId": "260901TFN06EA5",
+              "orderStatus": "PENDING",
+              "items": [
+                {
+                  "itemId": 18699182734,
+                  "itemName": "Short Saia Fitness Academia Suplex Feminino",
+                  "shopId": 1108440804,
+                  "shopName": "anakintimates",
+                  "itemPrice": "19.99",
+                  "qty": 1,
+                  "itemTotalCommission": "0.59985",
+                  "categoryLv1Name": "Moda Feminina"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "conversionId": 241910164178987,
+          "purchaseTime": 1788300000,
+          "clickTime": 1788299000,
+          "conversionStatus": "COMPLETED",
+          "totalCommission": "12.40",
+          "netCommission": "11.90",
+          "utmContent": "tiktok",
+          "orders": [
+            {
+              "orderId": "260902ABC00XYZ",
+              "orderStatus": "COMPLETED",
+              "items": [
+                {
+                  "itemId": 555001,
+                  "itemName": "Fone Bluetooth TWS",
+                  "shopId": 777,
+                  "shopName": "AudioTech",
+                  "itemPrice": "89.90",
+                  "qty": 2,
+                  "itemTotalCommission": "9.40"
+                },
+                {
+                  "itemId": 555002,
+                  "itemName": "Capa Protetora",
+                  "shopId": 777,
+                  "shopName": "AudioTech",
+                  "itemPrice": "15.00",
+                  "qty": 1,
+                  "itemTotalCommission": "3.00"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pageInfo": {
+        "page": 1,
+        "limit": 20,
+        "hasNextPage": false,
+        "scrollId": null
+      }
+    }
+  }
+}

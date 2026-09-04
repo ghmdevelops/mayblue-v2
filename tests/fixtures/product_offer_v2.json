@@ -1,0 +1,58 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [
+        {
+          "itemId": 23798776965,
+          "productName": "Fone de Ouvido Bluetooth TWS Pro 5.3",
+          "priceMin": "89.90",
+          "priceDiscountRate": 45,
+          "commissionRate": "0.1350",
+          "sales": 12480,
+          "imageUrl": "https://cf.shopee.com.br/file/abc",
+          "offerLink": "https://s.shopee.com.br/aaa111",
+          "productLink": "https://shopee.com.br/product/750190/23798776965",
+          "shopId": 750190,
+          "shopName": "AudioTech Oficial",
+          "ratingStar": "4.8",
+          "productCatIds": [100017, 100630]
+        },
+        {
+          "itemId": 11122233344,
+          "productName": "Cafeteira Expresso Compacta 500ml",
+          "priceMin": "349.00",
+          "priceDiscountRate": 12,
+          "commissionRate": "0.0420",
+          "sales": 310,
+          "imageUrl": "https://cf.shopee.com.br/file/def",
+          "offerLink": "https://s.shopee.com.br/bbb222",
+          "productLink": "https://shopee.com.br/product/880011/11122233344",
+          "shopId": 880011,
+          "shopName": "Casa e Cozinha BR",
+          "ratingStar": "4.2",
+          "productCatIds": [100039]
+        },
+        {
+          "itemId": 55566677788,
+          "productName": "Suporte de Celular Sem Comissao",
+          "priceMin": "19.90",
+          "priceDiscountRate": 0,
+          "commissionRate": "0.0000",
+          "sales": 4,
+          "imageUrl": null,
+          "offerLink": null,
+          "productLink": "https://shopee.com.br/product/990022/55566677788",
+          "shopId": 990022,
+          "shopName": "Loja Generica",
+          "ratingStar": "0",
+          "productCatIds": []
+        }
+      ],
+      "pageInfo": {
+        "page": 1,
+        "limit": 50,
+        "hasNextPage": false
+      }
+    }
+  }
+}

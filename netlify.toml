@@ -1,0 +1,33 @@
+# Deploy do flow02 no Netlify.
+#
+# O que sobe:
+#   publicado/          vitrine estatica que le o Firebase (gerada por `flow02 publicar`)
+#   netlify/functions/  redirecionador que conta cliques
+#
+# Variaveis de ambiente para configurar no painel do Netlify
+# (Site settings > Environment variables):
+#   FIREBASE_DATABASE_URL   https://SEU-PROJETO-default-rtdb.firebaseio.com
+#   FIREBASE_DB_SECRET      segredo legado do banco (so a Function usa; nunca vai
+#                           para o navegador). Necessario se as regras exigirem
+#                           auth para escrever em /flow02/cliques
+#   FLOW02_RAIZ             flow02
+#   FLOW02_FALLBACK         para onde mandar quando o codigo nao existir
+
+[build]
+  publish = "publicado"
+  functions = "netlify/functions"
+  command = "echo 'sem build: HTML estatico e funcoes sem dependencia'"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"

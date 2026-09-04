@@ -1,0 +1,4 @@
+# uma url por linha: url;preco;categoria
+https://www.mercadolivre.com.br/liquidificador-turbo/p/MLB22233344;189.90;casa
+https://www.mercadolivre.com.br/ofertas
+https://lista.mercadolivre.com.br/fone?q=fone

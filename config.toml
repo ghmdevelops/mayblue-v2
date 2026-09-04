@@ -1,0 +1,215 @@
+[geral]
+caminho_banco = "dados/flow02.sqlite3"
+caminho_saida = "saida"
+
+[coleta]
+limite_por_pagina = 50
+pausa_entre_requisicoes_s = 1.0
+tentativas_max = 4
+timeout_s = 30.0
+coletar_campanhas = true
+campanhas_paginas = 2
+conversoes_paginas = 10
+
+# O validatedReport exige o id do lote de validacao (nao existe listagem
+# geral). Pegue os ids no portal do afiliado, em Pagamentos, e liste aqui.
+validation_ids = []
+
+# Selecao de campos do GraphQL. Se a API responder erro 10010 (parsing error),
+# remova daqui o campo recusado -- `flow02 doctor` imprime a query exata.
+# Confira os nomes no playground em affiliate.shopee.com.br/open_api
+campos_produto = [
+  "itemId",
+  "productName",
+  "priceMin",
+  "priceDiscountRate",
+  "commissionRate",
+  "sales",
+  "imageUrl",
+  "offerLink",
+  "productLink",
+  "shopId",
+  "shopName",
+  "ratingStar",
+  "productCatIds",
+  # Janela de validade da oferta. Comissao de campanha expira, e saber a data
+  # antes evita divulgar link que vai render menos (ou nada).
+  "periodStartTime",
+  "periodEndTime",
+  # A taxa total se divide entre vendedor e Shopee. A parte do vendedor e
+  # campanha dele e pode acabar sem aviso; a da Shopee e estavel. Serve para
+  # marcar quais comissoes altas sao frageis.
+  "sellerCommissionRate",
+  "shopeeCommissionRate",
+  # Valor absoluto calculado pela propria Shopee, ja considerando teto.
+  "commission",
+]
+
+campos_campanha = [
+  "offerName",
+  "commissionRate",
+  "imageUrl",
+  "offerLink",
+  "originalLink",
+  "offerType",
+  "categoryId",
+  "collectionId",
+  "periodStartTime",
+  "periodEndTime",
+]
+
+# Nomes confirmados por introspecao do schema em 2026-09-04.
+# `orders` e um objeto aninhado, nao uma contagem -- a atribuicao por produto
+# vem de orders.items[].itemId.
+campos_conversao = [
+  "conversionId",
+  "purchaseTime",
+  "clickTime",
+  "conversionStatus",
+  "totalCommission",
+  "netCommission",
+  "estimatedTotalCommission",
+  "utmContent",
+  "orders { orderId orderStatus items { itemId itemName shopId shopName itemPrice qty itemTotalCommission categoryLv1Name } }",
+]
+
+campos_validado = [
+  "conversionId",
+  "purchaseTime",
+  "clickTime",
+  "totalCommission",
+  "netCommission",
+  "utmContent",
+  "orders { orderId orderStatus items { itemId itemName shopId shopName itemPrice qty itemTotalCommission } }",
+]
+
+# sortType: 1=relevancia 2=mais vendidos 3=preco desc 4=preco asc 5=maior comissao
+# listType: 0=todos 2=top performing 3=landing category 4=detail category 5=detail shop
+
+# As consultas abaixo trazem o ranking GLOBAL da Shopee, que e estreito e
+# enviesado para as categorias grandes. A varredura por categoria multiplica a
+# cobertura. Rode `flow02 categorias` depois da primeira coleta -- ele lista os
+# productCatId reais que apareceram, em vez de voce adivinhar ids de catalogo.
+[coleta.varredura]
+habilitada = false
+categorias = []
+paginas_por_categoria = 2
+sort_type = 5
+requisicoes_max = 200
+
+[[coleta.consultas]]
+nome = "maior_comissao"
+sort_type = 5
+list_type = 0
+paginas = 3
+
+[[coleta.consultas]]
+nome = "top_performing"
+sort_type = 2
+list_type = 2
+paginas = 3
+
+[[coleta.consultas]]
+nome = "comissao_extra_ams"
+sort_type = 5
+is_ams_offer = true
+paginas = 2
+
+[filtros]
+taxa_comissao_min = 0.04
+preco_min = 25.0
+preco_max = 3000.0
+vendas_min = 30
+rating_min = 4.0
+exigir_link_oferta = true
+
+[scoring]
+cvr_base = 0.02
+cvr_maximo = 0.5
+vendas_referencia = 5000
+peso_desconto = 0.6
+preco_referencia = 150.0
+elasticidade_preco = 0.5
+popularidade_min = 0.25
+popularidade_max = 2.0
+confianca_sem_rating = 0.6
+
+[ranking]
+top = 20
+max_por_loja = 3
+dias_minimos_historico = 2
+
+# Substitui o cvr heuristico pelo medido. Usa encolhimento bayesiano
+# (item -> loja -> global), entao amostra pequena e puxada para o pai em vez
+# de virar ruido. peso_prior e a pseudo-contagem: com 150 cliques o dado
+# proprio ja pesa metade.
+[calibracao]
+habilitada = true
+cliques_minimos = 20
+janela_dias = 30
+peso_prior = 150.0
+cvr_prior_padrao = 0.02
+
+# Detector de mudanca entre snapshots diarios.
+# variacao_comissao_min = 0.20 dispara quando a comissao muda 20% ou mais
+# (ex: 4% -> 4.8%). Comissao subindo costuma indicar campanha nova, com prazo.
+[alertas]
+variacao_comissao_min = 0.20
+variacao_preco_min = 0.10
+top_referencia = 20
+dias_para_sumico = 1
+
+# O desconto anunciado pela Shopee e contra o "preco original" declarado pelo
+# vendedor, que costuma ser inflado. Com snapshots diarios da para comparar
+# com a mediana realmente praticada.
+[preco]
+janela_dias = 30
+dias_minimos = 5
+tolerancia_pp = 15.0
+
+# Envio diario para o Telegram. Token vai no .env.
+# Como obter: fale com @BotFather no Telegram -> /newbot -> copie o token.
+# O chat_id sai em api.telegram.org/bot<TOKEN>/getUpdates depois de voce
+# mandar qualquer mensagem para o bot.
+[telegram]
+habilitado = false
+chat_id = ""
+top = 10
+
+# Espelho opcional no Firebase Realtime Database. O SQLite continua sendo a
+# fonte de verdade -- o Firebase e a vitrine para ver de celular/web.
+# ATENCAO: o Realtime Database e um produto separado do Firestore. Crie em
+# console.firebase.google.com > Realtime Database e cole a URL aqui.
+# As credenciais ficam no .env, nunca aqui.
+[firebase]
+habilitado = true
+# Preencha database_url OU projeto. Com so o projeto, a URL e inferida e
+# `flow02 doctor` sonda as regioes para confirmar qual existe de verdade.
+# Cuidado: o snippet de config do console so inclui databaseURL DEPOIS que o
+# Realtime Database e criado -- se o seu nao tem esse campo, o banco nao existe.
+database_url = "https://valida-10345-default-rtdb.firebaseio.com"
+projeto = "valida-10345"
+regiao = ""
+raiz = "flow02"
+enviar_ganhos = true
+
+# O Mercado Livre nao tem API de afiliados e os endpoints publicos estao em 403.
+# Duas formas de entrada, ambas manuais:
+#   entrada/mercadolivre.csv       item_id;nome;preco;taxa_comissao;categoria;...
+#   entrada/mercadolivre_urls.txt  uma URL por linha: url;preco;categoria
+[mercadolivre]
+caminho_curadoria = "entrada/mercadolivre.csv"
+caminho_urls = "entrada/mercadolivre_urls.txt"
+taxa_comissao_padrao = 0.04
+
+# A plataforma nao expoe a taxa, entao ela vem daqui. Ajuste conforme o
+# painel do seu programa -- estes valores sao ponto de partida, nao oficiais.
+[mercadolivre.comissao_por_categoria]
+eletronicos = 0.04
+celulares = 0.03
+informatica = 0.04
+casa = 0.05
+moda = 0.06
+beleza = 0.06
+esportes = 0.05
+brinquedos = 0.05
