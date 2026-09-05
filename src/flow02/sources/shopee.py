@@ -460,6 +460,7 @@ def para_oferta(no: dict, origem_consulta: str) -> Oferta | None:
         link_produto=no.get("productLink"),
         imagem=no.get("imageUrl"),
         expira_em=_para_data(no.get("periodEndTime")),
+        comecou_em=_para_data(no.get("periodStartTime")),
         taxa_vendedor=_flutuante(no.get("sellerCommissionRate")),
         taxa_shopee=_flutuante(no.get("shopeeCommissionRate")),
         comissao_api=_flutuante(no.get("commission")),
@@ -664,14 +665,24 @@ class FonteShopee:
         paginas = max(1, varredura.paginas_por_categoria)
         coletadas: list[Oferta] = []
 
-        for categoria in varredura.categorias:
+        # Alem do productCatId, as listas curadas da Shopee para a mesma
+        # categoria: medido que listType 3 e 4 com matchId devolvem conjuntos
+        # diferentes entre si e do productCatId.
+        alvos = [("cat", categoria, None) for categoria in varredura.categorias]
+        alvos += [(f"lista{tipo}", categoria, tipo)
+                  for tipo in varredura.list_types
+                  for categoria in varredura.categorias]
+
+        for prefixo, categoria, tipo in alvos:
             if orcamento <= 0:
                 _log.warning("varredura interrompida: orcamento de requisicoes esgotado")
                 break
             consulta = ConsultaConfig(
-                nome=f"categoria_{categoria}",
+                nome=f"{prefixo}_{categoria}",
                 sort_type=varredura.sort_type,
-                product_cat_id=int(categoria),
+                product_cat_id=None if tipo else int(categoria),
+                list_type=tipo,
+                match_id=int(categoria) if tipo else None,
                 paginas=min(paginas, orcamento),
             )
             nodes = cliente.paginar(
@@ -680,15 +691,16 @@ class FonteShopee:
                 ),
                 limite, consulta.paginas,
                 cfg.coleta.pausa_entre_requisicoes_s, "productOfferV2",
-                cache, f"categoria:{categoria}",
+                cache, f"{prefixo}:{categoria}",
             )
             orcamento -= max(1, (len(nodes) + limite - 1) // limite)
             coletadas.extend(
                 o for o in (para_oferta(n, consulta.nome) for n in nodes)
                 if o is not None
             )
-        _log.info("varredura por categoria: %s ofertas em %s categorias",
-                  len(coletadas), len(varredura.categorias))
+        _log.info("varredura: %s ofertas em %s consultas (%s categorias x %s listas)",
+                  len(coletadas), len(alvos), len(varredura.categorias),
+                  1 + len(varredura.list_types))
         return coletadas
 
     def coletar_lojas(self, cfg: Config, paginas: int = 2) -> list[dict]:

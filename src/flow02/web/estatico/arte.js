@@ -361,11 +361,31 @@ const ARTE = (() => {
     ].filter(Boolean).join("\n");
   }
 
+  /** Preenche o seletor de modelos e aplica o escolhido. */
+  function aplicarModelo() {
+    if (!itemAtual) return;
+    const escolha = document.getElementById("arte-modelo");
+    document.getElementById("arte-legenda").value =
+      MODELOS.montar(escolha.value, itemAtual, linkAtual);
+    const modelo = MODELOS.lista().find((m) => m.id === escolha.value);
+    document.getElementById("arte-modelo-quando").textContent =
+      modelo ? modelo.quando : "";
+  }
+
+  function prepararModelos() {
+    const escolha = document.getElementById("arte-modelo");
+    if (escolha.options.length) return;  // já montado
+    escolha.innerHTML = MODELOS.lista()
+      .map((m) => `<option value="${m.id}">${m.nome}</option>`).join("");
+    escolha.addEventListener("change", aplicarModelo);
+  }
+
   async function abrir(item, link) {
     itemAtual = item;
     linkAtual = link || item.link || "";
     document.getElementById("arte-titulo").textContent = item.nome.slice(0, 60);
-    document.getElementById("arte-legenda").value = montarLegenda(item, linkAtual);
+    prepararModelos();
+    aplicarModelo();
     document.getElementById("arte-roteiro").value = montarRoteiro(item);
     document.getElementById("modal-arte").hidden = false;
     await desenhar(item, document.getElementById("arte-formato").value);
@@ -407,14 +427,181 @@ const ARTE = (() => {
     return new Uint8Array(await blob.arrayBuffer());
   }
 
+  // Largura da miniatura embutida no HTML. A arte sai em 1080px; embutir
+  // nesse tamanho geraria um HTML de dezenas de megabytes com 40 produtos.
+  const LARGURA_PREVIA = 320;
+
   /**
-   * Gera um ZIP com uma arte por produto, mais um .txt com todas as legendas
-   * e roteiros. Reaproveita o mesmo canvas em sequência: 20 canvases de
+   * Miniatura em JPEG, como data URI, para embutir na página.
+   *
+   * Sem isto o HTML depende dos arquivos em `artes/`: abrir sem
+   * descompactar, mover o arquivo ou mandar só ele para alguém deixa a
+   * página cheia de imagem quebrada.
+   *
+   * JPEG e não PNG porque a diferença é grande em foto: a mesma prévia sai
+   * cerca de cinco vezes menor, e para conferir enquadramento e legibilidade
+   * a perda não aparece. O PNG em tamanho cheio continua no ZIP, e é ele que
+   * o botão "Baixar imagem" entrega.
+   */
+  function previaEmbutida(tela) {
+    const escala = LARGURA_PREVIA / tela.width;
+    const mini = document.createElement("canvas");
+    mini.width = LARGURA_PREVIA;
+    mini.height = Math.round(tela.height * escala);
+    const ctx = mini.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(tela, 0, 0, mini.width, mini.height);
+    return mini.toDataURL("image/jpeg", 0.72);
+  }
+
+  const escaparHtml = (t) => String(t ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+  /**
+   * Página que monta arte e texto lado a lado.
+   *
+   * Antes o ZIP entregava as imagens numa pasta e todas as legendas num .txt
+   * corrido — para postar era preciso abrir os dois e casar arquivo com
+   * texto na mão, item por item. Aqui cada produto aparece com a arte, a
+   * legenda e o roteiro juntos, cada um com seu botão de copiar.
+   *
+   * Detalhe que decide a implementação: o arquivo é aberto por `file://`,
+   * que o Chrome NÃO considera contexto seguro. `navigator.clipboard` fica
+   * indisponível ali, então é preciso o caminho antigo com `execCommand`.
+   */
+  function paginaDoLote(entradas, formato) {
+    const cartoes = entradas.map((e, i) => `
+  <article class="cartao">
+    <img src="${e.previa}" alt="" loading="lazy">
+    <div class="lado">
+      <h2>${i + 1}. ${escaparHtml(e.nome)}</h2>
+      <p class="meta">${escaparHtml(e.meta)}</p>
+      <label>Legenda</label>
+      <textarea rows="11" data-legenda>${escaparHtml(e.legenda)}</textarea>
+      <div class="botoes">
+        <button data-copiar="legenda">Copiar legenda</button>
+        <a download href="artes/${escaparHtml(e.arquivo)}"
+           title="PNG em tamanho cheio, na pasta artes/">Baixar PNG</a>
+      </div>
+      <details>
+        <summary>Roteiro para vídeo</summary>
+        <textarea rows="14" data-roteiro>${escaparHtml(e.roteiro)}</textarea>
+        <button data-copiar="roteiro">Copiar roteiro</button>
+      </details>
+    </div>
+  </article>`).join("");
+
+    return `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${entradas.length} artes — flow02</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: #0f1117; color: #f4f6fa;
+         font: 15px/1.55 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+           margin-bottom: 24px; }
+  h1 { font-size: 20px; margin: 0; }
+  .sub { color: #8a94a6; font-size: 13.5px; }
+  .nota { flex-basis: 100%; margin: 4px 0 0; color: #8a94a6; font-size: 13px;
+          line-height: 1.5; max-width: 70ch; }
+  .nota code { background: #1a1f2b; padding: 1px 6px; border-radius: 4px; }
+  button, a[download] {
+    background: #4f8cff; color: #06121f; border: 0; border-radius: 8px;
+    padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-block;
+  }
+  button.secundario, a[download] { background: #1a1f2b; color: #b3bccc;
+    border: 1px solid #262c3a; }
+  button:hover, a[download]:hover { filter: brightness(1.1); }
+  button.ok { background: #4fd6a4; }
+  .cartao { display: grid; grid-template-columns: 300px 1fr; gap: 20px;
+    background: #141821; border: 1px solid #1f2531; border-radius: 14px;
+    padding: 18px; margin-bottom: 18px; }
+  .cartao img { width: 100%; border-radius: 10px; background: #fff; }
+  .lado { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  h2 { font-size: 16px; margin: 0; line-height: 1.35; }
+  .meta { margin: 0; color: #4fd6a4; font-size: 13.5px; font-weight: 600; }
+  label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .7px;
+    color: #a7b2c4; font-weight: 650; }
+  textarea { width: 100%; background: #0f1117; color: #f4f6fa;
+    border: 1px solid #262c3a; border-radius: 8px; padding: 12px;
+    font: inherit; font-size: 13.5px; resize: vertical; }
+  .botoes { display: flex; gap: 8px; flex-wrap: wrap; }
+  details { margin-top: 4px; }
+  summary { cursor: pointer; color: #b3bccc; font-size: 13.5px; padding: 6px 0; }
+  details textarea { margin: 8px 0; font-family: ui-monospace, monospace;
+    font-size: 12.5px; }
+  @media (max-width: 720px) { .cartao { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>${entradas.length} artes prontas</h1>
+  <span class="sub">${escaparHtml(formato)} · gerado em ${new Date().toLocaleString("pt-BR")}</span>
+  <button id="tudo">Copiar todas as legendas</button>
+  <p class="nota">As imagens aqui são prévias reduzidas, embutidas nesta
+  página — ela funciona sozinha, mesmo movida de lugar. Para postar, use
+  <b>Baixar PNG</b>: entrega a arte em ${escaparHtml(formato)}, na pasta
+  <code>artes/</code>.</p>
+</header>
+${cartoes}
+<script>
+// file:// nao e contexto seguro: navigator.clipboard fica indisponivel no
+// Chrome. O execCommand e obsoleto, mas e o unico que funciona aqui.
+function copiar(texto) {
+  const campo = document.createElement("textarea");
+  campo.value = texto;
+  campo.style.position = "fixed";
+  campo.style.opacity = "0";
+  document.body.appendChild(campo);
+  campo.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+  campo.remove();
+  return ok;
+}
+
+function avisar(botao, ok) {
+  const original = botao.textContent;
+  botao.textContent = ok ? "copiado" : "falhou — copie manualmente";
+  botao.classList.toggle("ok", ok);
+  setTimeout(() => {
+    botao.textContent = original;
+    botao.classList.remove("ok");
+  }, 1600);
+}
+
+document.addEventListener("click", (evento) => {
+  const botao = evento.target.closest("[data-copiar]");
+  if (!botao) return;
+  const campo = botao.closest(".lado, details")
+    .querySelector("[data-" + botao.dataset.copiar + "]");
+  avisar(botao, copiar(campo.value));
+});
+
+document.getElementById("tudo").addEventListener("click", (evento) => {
+  const textos = [...document.querySelectorAll("[data-legenda]")]
+    .map((c, i) => (i + 1) + ". " + c.value);
+  avisar(evento.target, copiar(textos.join("\\n\\n" + "-".repeat(40) + "\\n\\n")));
+});
+</script>
+</body>
+</html>`;
+  }
+
+  /**
+   * Gera um ZIP com uma arte por produto e um `abrir.html` que mostra tudo
+   * montado. Reaproveita o mesmo canvas em sequência: 20 canvases de
    * 1080x1350 na memória ao mesmo tempo travariam o navegador.
    */
   async function gerarLote(itens, formato, links = {}, aoProgredir = () => {}) {
     const arquivos = [];
-    const textos = [];
+    const entradas = [];
 
     for (const [indice, item] of itens.entries()) {
       aoProgredir(indice + 1, itens.length, item.nome);
@@ -423,28 +610,34 @@ const ARTE = (() => {
       arquivos.push({ nome: `artes/${base}.png`, dados: await paraBytes(canvas()) });
 
       const link = links[item.item_id] || item.link || "";
-      textos.push([
-        `${"=".repeat(70)}`,
-        `${indice + 1}. ${item.nome}`,
-        `arquivo: ${base}.png`,
-        "",
-        "--- LEGENDA ---",
-        montarLegenda(item, link),
-        "",
-        "--- ROTEIRO ---",
-        montarRoteiro(item),
-        "",
-      ].join("\n"));
+      entradas.push({
+        arquivo: `${base}.png`,
+        previa: previaEmbutida(canvas()),
+        nome: item.nome,
+        meta: `${moedaBR(item.preco)} · você ganha ${moedaBR(item.comissao_valor)}`
+          + (item.vendas ? ` · ${item.vendas.toLocaleString("pt-BR")} vendidos` : ""),
+        legenda: montarLegenda(item, link),
+        roteiro: montarRoteiro(item),
+      });
     }
 
     const codificador = new TextEncoder();
     arquivos.push({
+      nome: "abrir.html",
+      dados: codificador.encode(paginaDoLote(entradas, formato)),
+    });
+    // O .txt continua indo: serve para quem prefere trabalhar no editor, e
+    // e o unico formato que sobrevive a copiar so um arquivo para o celular.
+    arquivos.push({
       nome: "legendas-e-roteiros.txt",
-      dados: codificador.encode(textos.join("\n")),
+      dados: codificador.encode(entradas.map((e, i) => [
+        "=".repeat(70), `${i + 1}. ${e.nome}`, `arquivo: ${e.arquivo}`, "",
+        "--- LEGENDA ---", e.legenda, "", "--- ROTEIRO ---", e.roteiro, "",
+      ].join("\n")).join("\n")),
     });
     return ZIP.criar(arquivos);
   }
 
   return { abrir, fechar, redesenhar, baixar, gerarLote, calcularLayout,
-           definirMarca, marca, montarLegenda, montarRoteiro };
+           paginaDoLote, definirMarca, marca, montarLegenda, montarRoteiro };
 })();

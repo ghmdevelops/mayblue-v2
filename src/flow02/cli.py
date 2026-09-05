@@ -21,14 +21,15 @@ from datetime import date, timedelta
 from pathlib import Path
 
 
-from . import (__version__, analise, backtest, backup, calibracao, config, db,
-               rastreio)
+from . import (__version__, analise, backtest, backup, calibracao, campanha,
+               config, db, rastreio)
 from .models import Oferta
 from .saidas import firebase, relatorio, telegram
 from .scoring import avaliar, score_historico
 from .sources import mercadolivre as ml
 from .sources.base import FonteIndisponivel, aplicar_filtros
 from .sources.mercadolivre import FonteMercadoLivre
+from .sources import shopee
 from .sources.shopee import FonteShopee
 from .tempo import dia_brasil, iso_utc
 
@@ -693,6 +694,9 @@ def comando_vitrine(args, cfg: config.Config) -> int:
         linhas = db.listar_vitrine(conexao, args.colecao)
         grupos = db.colecoes(conexao)
 
+    if args.para_shopee:
+        return _lista_para_o_portal(linhas)
+
     if not linhas:
         print("vitrine vazia. adicione com:\n"
               "  flow02 vitrine --item 18699075500\n"
@@ -719,6 +723,33 @@ def comando_vitrine(args, cfg: config.Config) -> int:
     if args.formato == "tabela" and len(grupos) > 1:
         resumo = ", ".join(f"{g['colecao']} ({g['itens']})" for g in grupos)
         print(f"\ncolecoes: {resumo}")
+    return 0
+
+
+def _lista_para_o_portal(linhas) -> int:
+    """Lista pronta para montar a mesma vitrine no portal da Shopee.
+
+    A API de afiliados tem exatamente duas mutations, as duas de link
+    (verificado por introspecao em 2026-09-04): nao ha como criar ou editar
+    vitrine por programa. O portal e o unico caminho.
+
+    O que da para fazer e tirar o trabalho de garimpar: aqui saem os links
+    de produto na ordem que voce curou, um por linha, para colar na busca do
+    portal sem precisar procurar cada item pelo nome.
+    """
+    if not linhas:
+        print("vitrine vazia -- nada a levar para o portal")
+        return 0
+
+    print(f"{len(linhas)} produto(s) para adicionar em")
+    print("  affiliate.shopee.com.br > Minha Vitrine > Adicionar produto")
+    print("\ncole cada link na busca do portal, na ordem:\n")
+    for posicao, linha in enumerate(linhas, start=1):
+        nome = relatorio.truncar(linha["nome"] or linha["item_id"], 52)
+        print(f"[ ] {posicao:>2}. {nome}")
+        print(f"       {linha['link_produto'] or linha['link_oferta'] or '-'}")
+    print("\nnao da para automatizar: a API de afiliados so tem mutation de")
+    print("link (generateShortLink e generateBatchShortLink). Vitrine, so no portal.")
     return 0
 
 
@@ -864,6 +895,119 @@ def _restaurar(cfg: config.Config) -> int:
     with db.conectar(cfg.caminho_banco) as conexao:
         contagem = backup.restaurar_da_nuvem(conexao, pacote)
     print("restaurado: " + ", ".join(f"{v} {k}" for k, v in contagem.items()))
+    return 0
+
+
+def comando_buscar(args, cfg: config.Config) -> int:
+    """Busca por palavra-chave direto na API, fora das consultas fixas.
+
+    As consultas do config.toml trazem sempre o mesmo ranking. Aqui voce
+    procura o que quiser -- util quando ja sabe o nicho que vai divulgar em
+    vez de esperar o produto aparecer no top.
+    """
+    consulta = config.ConsultaConfig(
+        nome=f"busca:{args.termo[:30]}",
+        sort_type=args.ordenar,
+        keyword=args.termo,
+        paginas=args.paginas,
+    )
+    fonte = FONTES["shopee"]
+    cliente = fonte.cliente(cfg)
+    limite = cfg.coleta.limite_por_pagina
+
+    try:
+        nodes = cliente.paginar(
+            lambda pagina: shopee.montar_query_product_offer(
+                consulta, pagina, limite, cfg.coleta.campos_produto),
+            limite, consulta.paginas,
+            cfg.coleta.pausa_entre_requisicoes_s, "productOfferV2",
+        )
+    except Exception as exc:
+        print(f"[shopee] ERRO: {exc}", file=sys.stderr)
+        return 1
+
+    ofertas = [o for o in (shopee.para_oferta(n, consulta.nome) for n in nodes)
+               if o is not None]
+    if not ofertas:
+        print(f"nada encontrado para '{args.termo}'")
+        return 0
+
+    if args.gravar:
+        dia = _resolver_dia("hoje")
+        calibrador = calibracao.Calibrador({}, cfg.calibracao)
+        avaliadas = [(o, avaliar(o, cfg.scoring, calibrador))
+                     for o in aplicar_filtros(ofertas, cfg.filtros)]
+        with db.conectar(cfg.caminho_banco) as conexao:
+            gravadas = db.salvar_ofertas(conexao, avaliadas, dia)
+        print(f"gravadas {gravadas} ofertas no dia {dia}\n")
+
+    ofertas.sort(key=lambda o: -(o.preco * o.taxa_comissao))
+    cabecalhos = ["produto", "preco", "%", "R$/venda", "vendas", "nota", "link"]
+    tabela = [
+        [
+            relatorio.truncar(o.nome, LIMITE_NOME),
+            f"{o.preco:.2f}",
+            f"{o.taxa_comissao * 100:.0f}",
+            f"{o.preco * o.taxa_comissao:.2f}",
+            f"{o.vendas:,}".replace(",", "."),
+            f"{o.rating:.1f}" if o.rating else "-",
+            o.link_oferta or "-",
+        ]
+        for o in ofertas[: args.top]
+    ]
+    _emitir(cabecalhos, tabela, args, f"Busca: {args.termo}",
+            cfg.caminho_saida, "busca")
+    if args.formato == "tabela" and not args.gravar:
+        print("\nuse --gravar para incluir no ranking do dia")
+    return 0
+
+
+def comando_campanha(args, cfg: config.Config) -> int:
+    """Quais produtos aguentam trafego pago no CPC que voce paga."""
+    with db.conectar(cfg.caminho_banco) as conexao:
+        linhas = db.ranking_dia(conexao, _resolver_dia(args.dia),
+                                2000, 0, "shopee", "comissao")
+
+    avaliados = []
+    for linha in linhas:
+        aval = campanha.avaliar(linha["comissao_valor"] or 0, args.cpc)
+        if aval is None or not aval.viavel:
+            continue
+        avaliados.append((linha, aval))
+        if len(avaliados) >= args.top:
+            break
+
+    print(f"=== o que aguenta CPC de R$ {args.cpc:.2f} ===")
+    print(f"  empata quando comissao x conversao = CPC\n")
+    if not avaliados:
+        print("  nenhum produto viavel nesse CPC. tente um CPC menor ou")
+        print("  produtos de comissao maior.")
+        return 0
+
+    cabecalhos = ["produto", "R$/venda", "conv. min", "cliques/venda",
+                  "teste R$", "vendas"]
+    tabela = [
+        [
+            relatorio.truncar(l["nome"], LIMITE_NOME),
+            f"{l['comissao_valor']:.2f}",
+            f"{a.conversao_necessaria * 100:.2f}%",
+            f"{a.cliques_por_venda:.0f}",
+            f"{campanha.orcamento_de_teste(l['comissao_valor'], args.cpc):.0f}",
+            f"{l['vendas']:,}".replace(",", "."),
+        ]
+        for l, a in avaliados
+    ]
+    _emitir(cabecalhos, tabela, args,
+            f"Viabilidade a CPC R$ {args.cpc:.2f}", cfg.caminho_saida, "campanha")
+
+    if args.formato == "tabela":
+        print("\nconv. min     = conversao minima para nao ter prejuizo")
+        print("cliques/venda = quantos cliques ate empatar")
+        print("teste R$      = orcamento para o teste render ~3 vendas;")
+        print("                menos que isso, zero vendas nao prova nada")
+        print(f"\nreferencia: trafego frio no Brasil costuma converter entre "
+              f"{campanha.CONVERSAO_TIPICA_MIN * 100:.1f}% e "
+              f"{campanha.CONVERSAO_TIPICA_MAX * 100:.1f}%")
     return 0
 
 
@@ -1125,7 +1269,8 @@ def comando_publicar(args, cfg: config.Config) -> int:
 
     try:
         if args.netlify:
-            pacote = publicar.preparar_netlify(cfg)
+            pacote = publicar.preparar_netlify(
+                cfg, com_vitrine=not args.so_redirecionador)
             print(_instrucoes_netlify(cfg, pacote))
             return 0
         destino = publicar.escrever(cfg, args.saida)
@@ -1137,32 +1282,55 @@ def comando_publicar(args, cfg: config.Config) -> int:
 
 
 def _instrucoes_netlify(cfg: config.Config, pacote: dict) -> str:
-    return "\n".join([
+    com_vitrine = pacote.get("com_vitrine", True)
+    linhas = [
         "pacote pronto para o Netlify:",
-        f"  vitrine  {pacote['indice']}",
+        f"  pagina   {pacote['indice']}"
+        + ("" if com_vitrine else "   (em branco, so o redirecionador sobe)"),
         f"  funcao   {pacote['funcao']}",
         f"  config   {pacote['config']}",
         "",
-        "1) instale a CLI e faca login (uma vez):",
-        "     npm i -g netlify-cli && netlify login",
-        "   sem npm nesta rede? use o deploy por arrastar em app.netlify.com/drop",
-        "   (nesse caso a Function nao sobe -- so a vitrine)",
+        "COMO O GIT ESTA CONFIGURADO",
+        "  o netlify.toml aponta publish = 'publicado', entao essa pasta",
+        "  PRECISA estar versionada. Confira com:",
+        "     git status --short publicado",
+        "  se nao aparecer nada e o deploy subir vazio, ela esta no .gitignore.",
         "",
-        "2) publique:",
-        "     netlify deploy --prod",
+        "PUBLICANDO",
+        "  com a integracao de deploy que voce ja fez, basta:",
+        "     git add publicado && git commit -m 'pagina' && git push",
+        "  o Netlify constroi sozinho a cada push.",
         "",
-        "3) no painel do Netlify, em Environment variables, defina:",
+        "VARIAVEIS DE AMBIENTE (Site settings > Environment variables)",
         f"     FIREBASE_DATABASE_URL = {cfg.firebase.url or '(sua url do RTDB)'}",
         f"     FLOW02_RAIZ           = {cfg.firebase.raiz}",
         "     FIREBASE_DB_SECRET    = (segredo do banco, se as regras exigirem auth)",
+        "  a Function le daqui, no servidor. Nada disso vai para o navegador.",
         "",
-        "4) libere a escrita de cliques nas regras do Realtime Database:",
-        '     "cliques": { ".read": true, ".write": true }',
-        "   dentro do no /" + cfg.firebase.raiz,
+        "REGRAS DO FIREBASE",
+        "  cole o conteudo de firebase-regras.json no console do Firebase,",
+        "  em Realtime Database > Regras. Sem isso o banco fica aberto para",
+        "  qualquer pessoa que descubra a URL.",
+        "",
+        "O QUE NAO SOBE",
+        "  o painel de controle. Ele e um servidor Python que le o SQLite da",
+        "  sua maquina e executa comandos -- o Netlify so hospeda arquivo",
+        "  estatico e funcao em JavaScript. Para usar no celular, rode aqui",
+        "  `flow02 web --rede` e acesse pelo IP local.",
         "",
         "depois disso, os links /r/<codigo> contam clique antes de redirecionar,",
         "e `flow02 cliques` traz os numeros de volta para o CVR real.",
-    ])
+    ]
+    if not com_vitrine:
+        linhas[4:4] = [
+            "",
+            "MODO SO REDIRECIONADOR",
+            "  a pagina publicada fica em branco e marcada como noindex.",
+            "  o contador de cliques funciona igual; o que voce abre mao e de",
+            "  navegar a vitrine pelo celular -- que o `flow02 web --rede`",
+            "  resolve sem expor nada.",
+        ]
+    return "\n".join(linhas)
 
 
 def comando_link(args, cfg: config.Config) -> int:
@@ -1429,6 +1597,21 @@ def construir_parser() -> argparse.ArgumentParser:
     copia.add_argument("--restaurar", action="store_true",
                        help="traz o backup do Firebase de volta para o banco")
 
+    busca = saida(subparsers.add_parser(
+        "buscar", help="procura produtos por palavra-chave na API"))
+    busca.add_argument("termo", help="o que procurar, ex: 'creatina'")
+    busca.add_argument("--paginas", type=int, default=2)
+    busca.add_argument("--ordenar", type=int, default=5,
+                       help="5=maior comissao 2=mais vendidos 4=menor preco")
+    busca.add_argument("--gravar", action="store_true",
+                       help="inclui os achados no ranking do dia")
+
+    camp = saida(subparsers.add_parser(
+        "campanha", help="quais produtos aguentam trafego pago no seu CPC"))
+    camp.add_argument("--cpc", type=float, default=1.0,
+                      help="quanto voce paga por clique (veja no gerenciador)")
+    camp.add_argument("--dia", default="hoje")
+
     prova = subparsers.add_parser(
         "backtest", help="mede se o EPC previsto acertou o que rendeu")
     prova.add_argument("--fatia-topo", type=float, default=0.3,
@@ -1452,6 +1635,9 @@ def construir_parser() -> argparse.ArgumentParser:
     vitrine.add_argument("--item", help="item_id do produto")
     vitrine.add_argument("--colecao", help="agrupa em uma colecao (ex: casa)")
     vitrine.add_argument("--remover", action="store_true")
+    vitrine.add_argument("--para-shopee", action="store_true",
+                         help="lista os links para montar a mesma vitrine no "
+                              "portal da Shopee (a API nao permite automatizar)")
 
     alvo = saida(plataforma(subparsers.add_parser(
         "alvo", help="alerta quando o preco cair abaixo de um valor")))
@@ -1495,6 +1681,9 @@ def construir_parser() -> argparse.ArgumentParser:
     publicar.add_argument("--saida", type=Path)
     publicar.add_argument("--netlify", action="store_true",
                           help="monta a pasta publicado/ para deploy no Netlify")
+    publicar.add_argument("--so-redirecionador", action="store_true",
+                          help="publica so o contador de cliques, sem a vitrine: "
+                               "nao expoe a URL do Firebase no navegador")
 
     link = plataforma(subparsers.add_parser(
         "link", help="gera link curto (Shopee) ou valida URL (ML)"))
@@ -1516,6 +1705,8 @@ COMANDOS = {
     "saude": comando_saude,
     "lojas": comando_lojas,
     "backtest": comando_backtest,
+    "campanha": comando_campanha,
+    "buscar": comando_buscar,
     "backup": comando_backup,
     "agendar": comando_agendar,
     "cliques": comando_cliques,

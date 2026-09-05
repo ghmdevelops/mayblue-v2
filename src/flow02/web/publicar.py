@@ -46,25 +46,54 @@ def escrever(cfg: Config, destino: Path | None = None) -> Path:
     return destino
 
 
-def preparar_netlify(cfg: Config, pasta: Path | None = None) -> dict:
+PAGINA_MINIMA = """<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>.</title>
+<style>
+  body { background:#0f1117; color:#3a4150; font:14px system-ui, sans-serif;
+         display:grid; place-items:center; height:100vh; margin:0; }
+</style>
+</head>
+<body><p>.</p></body>
+</html>
+"""
+
+
+def preparar_netlify(cfg: Config, pasta: Path | None = None,
+                     com_vitrine: bool = True) -> dict:
     """Monta a pasta que o Netlify publica.
 
     A vitrine vira `index.html` porque o Netlify serve isso na raiz. A
     Function do redirecionador ja mora em netlify/functions e nao precisa
     ser copiada -- o netlify.toml aponta para la.
+
+    `com_vitrine=False` sobe so o redirecionador. A diferenca importa: a
+    Function le as credenciais de `process.env` e roda no servidor, entao
+    nada dela chega ao navegador. A vitrine, por ser pagina cliente, carrega
+    a URL e a apiKey do Firebase visiveis para qualquer visitante -- e uma
+    URL do Netlify e publica mesmo sem ser divulgada.
+
+    Para quem so quer medir cliques, subir a vitrine e expor sem ganho.
     """
     pasta = pasta or (RAIZ / "publicado")
     pasta.mkdir(parents=True, exist_ok=True)
     indice = pasta / "index.html"
-    indice.write_text(gerar(cfg), encoding="utf-8")
+    indice.write_text(gerar(cfg) if com_vitrine else PAGINA_MINIMA,
+                      encoding="utf-8")
 
     (pasta / "_headers").write_text(
-        "/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n",
+        "/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n"
+        + ("" if com_vitrine else "  X-Robots-Tag: noindex\n"),
         encoding="utf-8",
     )
     return {
         "pasta": pasta,
         "indice": indice,
+        "com_vitrine": com_vitrine,
         "funcao": RAIZ / "netlify" / "functions" / "r.js",
         "config": RAIZ / "netlify.toml",
     }

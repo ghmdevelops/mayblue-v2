@@ -7,6 +7,9 @@ from datetime import date, timedelta
 import json
 
 from .. import analise, calibracao, config, db, oportunidade, variantes
+# Apelido: este modulo ja tem uma funcao `categorias` exposta na API, e o
+# nome importado seria sombreado por ela.
+from .. import categorias as rotulos
 from ..scoring import score_historico
 from ..sources.shopee import FonteShopee
 from ..tempo import dia_brasil
@@ -99,6 +102,30 @@ def top(cfg: config.Config, parametros: dict) -> dict:
 
     linhas = _filtrar(linhas, parametros, curados)
 
+    categoria = (parametros.get("categoria") or "").strip()
+    if categoria:
+        linhas = [l for l in linhas
+                  if categoria in (l["categoria_ids"] or "").split(",")]
+
+    # "Mais vendidos" com recorte de periodo so existe comparando snapshots:
+    # o campo da API e acumulado. Sem a segunda ponta, nao ha o que subtrair.
+    ordenacao = parametros.get("ordenar") or "epc"
+    janela = _inteiro(parametros.get("janela"), 0)
+    if ordenacao == "tendencia" and janela <= 0:
+        janela = JANELA_TENDENCIA
+
+    periodo = {}
+    if janela > 0:
+        with db.conectar(cfg.caminho_banco) as conexao:
+            periodo = db.vendas_no_periodo(conexao, dia, janela, plataforma)
+        if periodo:
+            linhas = [l for l in linhas
+                      if (l["plataforma"], l["item_id"]) in periodo]
+            chave_ordem = (_forca_da_tendencia if ordenacao == "tendencia"
+                           else lambda p: p["delta"])
+            linhas.sort(key=lambda l: -chave_ordem(
+                periodo[(l["plataforma"], l["item_id"])]))
+
     # Monta um pouco alem do limite: o filtro de oportunidade descarta itens,
     # e cortar antes deixaria a lista mais curta do que o pedido. O teto
     # evita percorrer o catalogo inteiro quando nao ha filtro.
@@ -140,6 +167,10 @@ def top(cfg: config.Config, parametros: dict) -> dict:
             "taxa_shopee": linha["taxa_shopee"],
             "comissao_api": linha["comissao_api"],
             "fragilidade": _fragilidade(linha),
+            "ritmo": _ritmo_da_oferta(linha, dia),
+            "no_periodo": periodo.get(chave),
+            "tendencia": (round(_forca_da_tendencia(periodo[chave]) * 100, 1)
+                          if chave in periodo else None),
             "menor_preco": posicao_preco.e_minimo,
             "preco_minimo": posicao_preco.minimo,
             "dia_minimo": posicao_preco.dia_minimo,
@@ -178,7 +209,24 @@ def top(cfg: config.Config, parametros: dict) -> dict:
 
     return {"dia": dia, "total": len(linhas), "oportunidades": fortes,
             "quase_oportunidades": quases, "variantes_escondidas": escondidas,
+            "janela": janela, "com_periodo": len(periodo),
             "itens": itens[:limite]}
+
+
+def lista_categorias(cfg: config.Config, parametros: dict) -> dict:
+    """Categorias vistas na coleta, com rotulo derivado dos nomes."""
+    dia = _dia(parametros.get("dia"))
+    with db.conectar(cfg.caminho_banco) as conexao:
+        linhas = conexao.execute(
+            "SELECT categoria_ids, nome, comissao_valor FROM oferta_dia "
+            "WHERE dia = ?", (dia,),
+        ).fetchall()
+        dias = db.dias_de_historico(conexao)
+    return {
+        "dia": dia,
+        "dias_de_historico": dias,
+        "itens": rotulos.resumir(linhas),
+    }
 
 
 def alertas(cfg: config.Config, parametros: dict) -> dict:
@@ -413,6 +461,55 @@ def _fragilidade(linha) -> dict | None:
         # Piso: o que sobra se o vendedor encerrar a campanha dele.
         "piso": round((linha["preco"] or 0) * shopee, 2),
         "fragil": fatia >= FATIA_FRAGIL,
+    }
+
+
+JANELA_TENDENCIA = 7
+VOLUME_MINIMO_TENDENCIA = 10  # abaixo disso, crescimento e ruido
+
+
+def _forca_da_tendencia(registro: dict) -> float:
+    """Crescimento relativo, nao volume absoluto.
+
+    Um produto que saltou de 20 para 60 vendas cresceu 200%; um que foi de
+    9.000 para 9.100 cresceu 1%, apesar de ter vendido mais unidades. Para
+    "em alta" o que interessa e a aceleracao -- o gigante ja estava vendendo
+    antes e nao e novidade.
+
+    Sem piso de volume, qualquer produto que saiu de 1 para 3 vendas
+    apareceria com 200% e dominaria a lista com ruido.
+    """
+    delta = registro["delta"] or 0
+    if delta < VOLUME_MINIMO_TENDENCIA:
+        return 0.0
+    base = max((registro["acumulado"] or 0) - delta, 1)
+    return delta / base
+
+
+def _ritmo_da_oferta(linha, dia: str) -> dict | None:
+    """Vendas por dia desde que a oferta entrou no ar.
+
+    Diferente da velocidade, que compara dois dias de coleta e so funciona a
+    partir do segundo dia: este sai de uma coleta so, dividindo o acumulado
+    pelo tempo no ar.
+
+    E uma media do periodo inteiro, nao o ritmo de hoje -- produto que
+    bombou no lancamento e parou aparece bem aqui. Serve para comparar
+    produtos entre si, nao para dizer o que esta acelerando agora.
+    """
+    if not linha["comecou_em"] or not linha["vendas"]:
+        return None
+    try:
+        dias = (date.fromisoformat(dia)
+                - date.fromisoformat(linha["comecou_em"])).days
+    except ValueError:
+        return None
+    if dias < 1 or dias > HORIZONTE_PLAUSIVEL:
+        return None
+    return {
+        "dias_no_ar": dias,
+        "por_dia": round(linha["vendas"] / dias, 1),
+        "desde": linha["comecou_em"],
     }
 
 

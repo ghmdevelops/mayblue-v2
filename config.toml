@@ -83,19 +83,58 @@ campos_validado = [
   "orders { orderId orderStatus items { itemId itemName shopId shopName itemPrice qty itemTotalCommission } }",
 ]
 
-# sortType: 1=relevancia 2=mais vendidos 3=preco desc 4=preco asc 5=maior comissao
-# listType: 0=todos 2=top performing 3=landing category 4=detail category 5=detail shop
+# listType: 0=todos 2=top performing 3=landing category 4=detail category
+#           1 e 5 vem vazios; 3, 4 e 5 exigem matchId
+#
+# sortType: MEDIDO EM 2026-09-04 -- NAO TEM EFEITO.
+#
+# A documentacao diz 1=relevancia 2=mais vendidos 3=preco desc 4=preco asc
+# 5=maior comissao. Na pratica, os cinco devolvem os MESMOS 20 itens na
+# MESMA ordem: com sortType=4 (preco crescente) os precos vieram fora de
+# ordem. Foi conferido pedindo as tres variantes e comparando item a item.
+#
+# Consequencia: consultas que so diferem no sortType sao duplicatas. O que
+# muda o conjunto de verdade e o listType e o matchId.
 
 # As consultas abaixo trazem o ranking GLOBAL da Shopee, que e estreito e
 # enviesado para as categorias grandes. A varredura por categoria multiplica a
 # cobertura. Rode `flow02 categorias` depois da primeira coleta -- ele lista os
 # productCatId reais que apareceram, em vez de voce adivinhar ids de catalogo.
 [coleta.varredura]
-habilitada = false
-categorias = []
+# Ligada com os ids que `flow02 categorias` encontrou na coleta real.
+#
+# Sem isto a coleta so pedia o ranking GLOBAL tres vezes, sempre com a mesma
+# ordenacao -- por isso os mesmos produtos voltavam. Aumentar --quantidade
+# so descia mais fundo na MESMA lista; nao trazia produto diferente.
+#
+# Cada categoria tem seu proprio ranking, entao a variedade vem daqui.
+habilitada = true
+categorias = [
+  100001,  # beleza
+  100002,
+  100006,
+  100010,
+  100017,
+  100019,
+  100041,
+  100104,
+  100205,
+  100630,  # a maior da sua coleta: 75 itens
+  100664,
+  100896,
+  100898,
+  100899,
+  100901,
+  100905,
+]
 paginas_por_categoria = 2
 sort_type = 5
 requisicoes_max = 200
+# Listas curadas da Shopee por categoria -- o equivalente as abas do app.
+# Medido: listType 3 e 4 com matchId da categoria devolvem conjuntos
+# DIFERENTES entre si e diferentes do productCatId. Cada um e uma vitrine
+# propria da Shopee, e e daqui que vem variedade de verdade.
+list_types = [3, 4]
 
 [[coleta.consultas]]
 nome = "maior_comissao"
@@ -114,6 +153,10 @@ nome = "comissao_extra_ams"
 sort_type = 5
 is_ams_offer = true
 paginas = 2
+
+# A consulta "mais_vendidos" foi removida: media em 2026-09-04 mostrou que
+# ela devolvia exatamente os mesmos itens de "maior_comissao", porque so
+# diferiam no sortType -- que a API ignora. Era gasto de requisicao a toa.
 
 [filtros]
 taxa_comissao_min = 0.04

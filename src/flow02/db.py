@@ -16,7 +16,7 @@ import json
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from .models import Avaliacao, Conversao, Oferta
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS oferta_dia (
     link_produto    TEXT,
     imagem          TEXT,
     expira_em       TEXT,
+    comecou_em      TEXT,
     taxa_vendedor   REAL,
     taxa_shopee     REAL,
     comissao_api    REAL,
@@ -185,13 +186,13 @@ _UPSERT = """
 INSERT INTO oferta_dia (
     dia, plataforma, item_id, coletado_em, nome, preco, taxa_comissao,
     comissao_valor, desconto_pct, vendas, rating, loja_id, loja_nome,
-    categoria_ids, link_oferta, link_produto, imagem, expira_em,
+    categoria_ids, link_oferta, link_produto, imagem, expira_em, comecou_em,
     taxa_vendedor, taxa_shopee, comissao_api,
     cvr_estimado, score, calibrado, origem_consulta, componentes
 ) VALUES (
     :dia, :plataforma, :item_id, :coletado_em, :nome, :preco, :taxa_comissao,
     :comissao_valor, :desconto_pct, :vendas, :rating, :loja_id, :loja_nome,
-    :categoria_ids, :link_oferta, :link_produto, :imagem, :expira_em,
+    :categoria_ids, :link_oferta, :link_produto, :imagem, :expira_em, :comecou_em,
     :taxa_vendedor, :taxa_shopee, :comissao_api,
     :cvr_estimado, :score, :calibrado, :origem_consulta, :componentes
 )
@@ -211,6 +212,7 @@ ON CONFLICT (dia, plataforma, item_id) DO UPDATE SET
     link_produto    = excluded.link_produto,
     imagem          = excluded.imagem,
     expira_em       = excluded.expira_em,
+    comecou_em      = excluded.comecou_em,
     taxa_vendedor   = excluded.taxa_vendedor,
     taxa_shopee     = excluded.taxa_shopee,
     comissao_api    = excluded.comissao_api,
@@ -252,6 +254,7 @@ MIGRACOES: tuple[tuple[str, str, str], ...] = (
     ("oferta_dia", "taxa_vendedor", "REAL"),
     ("oferta_dia", "taxa_shopee", "REAL"),
     ("oferta_dia", "comissao_api", "REAL"),
+    ("oferta_dia", "comecou_em", "TEXT"),
 )
 
 
@@ -308,6 +311,7 @@ def _para_linha(oferta: Oferta, avaliacao: Avaliacao, dia: str) -> dict:
         "link_produto": oferta.link_produto,
         "imagem": oferta.imagem,
         "expira_em": oferta.expira_em,
+        "comecou_em": oferta.comecou_em,
         "taxa_vendedor": oferta.taxa_vendedor,
         "taxa_shopee": oferta.taxa_shopee,
         "comissao_api": oferta.comissao_api,
@@ -367,6 +371,10 @@ ORDENACOES = {
     "preco": "preco",
     "taxa": "taxa_comissao",
     "nota": "rating",
+    # "tendencia" nao tem coluna: crescimento so existe comparando dois dias,
+    # e a reordenacao acontece depois, em Python. Aqui serve o volume, que e
+    # a aproximacao menos errada quando ainda nao ha historico.
+    "tendencia": "vendas",
 }
 
 
@@ -1237,6 +1245,59 @@ def salvar_link(conexao: sqlite3.Connection, plataforma: str, registro: dict) ->
         (plataforma, registro["url_origem"], registro.get("sub_ids", ""),
          registro["link_curto"], item_id, registro["gerado_em"]),
     )
+
+
+def vendas_no_periodo(
+    conexao: sqlite3.Connection, dia: str, dias: int,
+    plataforma: str | None = None,
+) -> dict[tuple[str, str], dict]:
+    """Quantas unidades cada produto vendeu numa janela.
+
+    O campo `sales` da API e acumulado desde sempre; nao existe recorte por
+    periodo. A unica forma de saber quanto vendeu na ultima semana e subtrair
+    o acumulado de hoje do acumulado de sete dias atras.
+
+    Devolve so os produtos presentes nas DUAS pontas: item que apareceu no
+    meio do caminho nao tem base de comparacao, e mostrar o acumulado dele
+    como se fosse do periodo inflaria o numero.
+    """
+    inicio = (date.fromisoformat(dia) - timedelta(days=dias)).isoformat()
+    linhas = conexao.execute(
+        """
+        SELECT hoje.plataforma, hoje.item_id, hoje.nome,
+               hoje.vendas - antes.vendas AS delta,
+               hoje.vendas               AS acumulado,
+               antes.dia                 AS base
+        FROM oferta_dia hoje
+        JOIN oferta_dia antes
+          ON antes.plataforma = hoje.plataforma
+         AND antes.item_id    = hoje.item_id
+         AND antes.dia = (
+               SELECT MAX(o.dia) FROM oferta_dia o
+                WHERE o.plataforma = hoje.plataforma
+                  AND o.item_id    = hoje.item_id
+                  AND o.dia <= :inicio
+             )
+        WHERE hoje.dia = :dia
+          AND (:plataforma IS NULL OR hoje.plataforma = :plataforma)
+          AND hoje.vendas >= antes.vendas
+        """,
+        {"dia": dia, "inicio": inicio, "plataforma": plataforma},
+    )
+    return {
+        (l["plataforma"], l["item_id"]): {
+            "delta": l["delta"], "acumulado": l["acumulado"], "base": l["base"],
+        }
+        for l in linhas
+    }
+
+
+def dias_de_historico(conexao: sqlite3.Connection,
+                      plataforma: str | None = None) -> int:
+    return conexao.execute(
+        "SELECT COUNT(DISTINCT dia) n FROM oferta_dia "
+        "WHERE (:p IS NULL OR plataforma = :p)", {"p": plataforma},
+    ).fetchone()["n"]
 
 
 def vendas_por_canal(

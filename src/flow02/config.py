@@ -55,6 +55,10 @@ class VarreduraConfig:
     paginas_por_categoria: int = 2
     sort_type: int = 5
     requisicoes_max: int = 200
+    # Listas curadas da Shopee para a mesma categoria. Medido em 2026-09-04:
+    # listType 3 e 4 com matchId devolvem conjuntos diferentes entre si e
+    # diferentes do productCatId -- cada um e uma vitrine propria.
+    list_types: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,6 +316,7 @@ def carregar(caminho: Path = CAMINHO_CONFIG) -> Config:
     coleta_bruta["validation_ids"] = tuple(coleta_bruta.get("validation_ids", []))
     varredura_bruta = dict(coleta_bruta.pop("varredura", {}))
     varredura_bruta["categorias"] = tuple(varredura_bruta.get("categorias", []))
+    varredura_bruta["list_types"] = tuple(varredura_bruta.get("list_types", []))
     coleta = _secao(
         {"coleta": coleta_bruta}, "coleta", ColetaConfig,
         consultas=consultas,

@@ -42,9 +42,18 @@
 <main>
 
 <section id="painel-ranking" class="painel ativo">
-  <div class="titulo-secao">
-    <h2>Ranking do dia</h2>
-    <span class="legenda">Tudo que foi coletado hoje. Escolha o critério e monte sua seleção.</span>
+  <div class="titulo-secao com-acoes">
+    <div>
+      <h2>Ranking do dia</h2>
+      <span class="legenda">Tudo que foi coletado hoje. Escolha o critério e monte sua seleção.</span>
+    </div>
+    <div class="acoes-titulo">
+      <span class="atualizado" id="atualizado-em"></span>
+      <button class="secundario" id="btn-recarregar"
+        data-dica="Relê o que já está gravado no seu computador. É instantâneo, mas não traz produto novo — só reaplica os filtros sobre a coleta atual.&#10;&#10;Use depois de mudar um filtro ou marcar itens na vitrine.">Recarregar</button>
+      <button id="btn-coletar-agora"
+        data-dica="Pergunta à Shopee o que há de novo agora e grava por cima da coleta de hoje. Demora de 1 a 3 minutos.&#10;&#10;É isto que traz produto que ainda não estava na lista, e atualiza preço e número de vendidos.">Buscar novos na Shopee</button>
+    </div>
   </div>
   <div class="atalhos" id="atalhos">
     <button class="atalho ativo" data-ordenar="epc"
@@ -54,6 +63,10 @@
     <button class="atalho" data-ordenar="vendas"
       data-dica="Ordena pelo número de unidades já vendidas na Shopee.&#10;&#10;Mostra o que o público já comprova que compra. Cuidado: muito vendido costuma ser produto barato, com comissão baixa.">
       <b>Mais vendidos do dia</b><span>maior volume</span>
+    </button>
+    <button class="atalho" data-ordenar="tendencia"
+      data-dica="Ordena por CRESCIMENTO, não por volume.&#10;&#10;Um produto que saltou de 20 para 60 vendas cresceu 200%; um que foi de 9.000 para 9.100 cresceu 1%, mesmo tendo vendido mais unidades. O gigante já vendia antes e não é novidade.&#10;&#10;Precisa de pelo menos duas coletas em dias diferentes: a Shopee só informa o total acumulado, então a aceleração vem da comparação.">
+      <b>Em alta</b><span>maior crescimento</span>
     </button>
     <button class="atalho" data-ordenar="comissao"
       data-dica="Ordena pelo valor em reais que entra no seu bolso a cada venda (preço × percentual).&#10;&#10;Cuidado: os que mais pagam costumam ser caros e vender pouco. Compare com a lista de mais vendidos.">
@@ -104,6 +117,23 @@
     <label class="caixa" data-dica="Impede que uma única loja domine o ranking, mostrando no máximo alguns itens por vendedor.&#10;&#10;Sem isso, uma loja com catálogo grande e comissão alta ocupa a lista inteira e você perde variedade.">
       <input type="checkbox" id="filtro-diversificar" checked> Limitar por loja
     </label>
+    <label data-dica="Recorta 'mais vendidos' por período.&#10;&#10;A Shopee só informa o total acumulado desde sempre — não existe campo de 'vendido esta semana'. O flow02 calcula subtraindo a coleta de hoje da coleta de N dias atrás, então cada janela precisa de coleta naquele dia.">
+      Vendidos em
+      <select id="filtro-janela">
+        <option value="0">total acumulado</option>
+        <option value="1">último dia</option>
+        <option value="7">última semana</option>
+        <option value="30">último mês</option>
+      </select>
+    </label>
+    <label data-dica="Filtra por categoria da Shopee.&#10;&#10;O rótulo entre parênteses é derivado das palavras mais comuns nos nomes dos produtos daquela categoria — a API só devolve o número, sem nome oficial.">
+      Categoria
+      <select id="filtro-categoria"><option value="">todas</option></select>
+    </label>
+    <label data-dica="Formato do texto que o botão Copiar coloca na área de transferência.&#10;&#10;Link solto num grupo é ignorado: ninguém clica em URL sem saber o que é. O post completo traz nome, preço, economia e prova social junto.">
+      Copiar como
+      <select id="filtro-modelo"></select>
+    </label>
     <label data-dica="Oportunidade = todos os critérios avaliados batendo ao mesmo tempo: paga bem, EPC no topo do dia, vendendo, disponível e sem desconto inflado.&#10;&#10;Sinal isolado engana: um produto pode ter desconto enorme e comissão de centavos, ou pagar muito e não vender. O que identifica oportunidade é a coincidência.&#10;&#10;'Quase' inclui quem falha em um critério só — muitas vezes é algo que você avalia melhor que o programa.">
       Oportunidade
       <select id="filtro-oportunidades">
@@ -124,7 +154,7 @@
     <button class="secundario" id="btn-copiar-post"
       data-dica="Copia a lista inteira já formatada para colar no WhatsApp, Telegram ou legenda: nome, preço, sua comissão e o link de cada item.&#10;&#10;Se você escolheu um canal em 'Divulgar em', os links saem marcados.">Copiar como post</button>
     <button class="secundario" id="btn-lote-ranking"
-      data-dica="Gera uma imagem pronta para post de cada produto da lista e baixa tudo num arquivo .zip, junto com um .txt com as legendas e os roteiros de vídeo.&#10;&#10;Limite de 40 por vez.">Gerar artes em lote</button>
+      data-dica="Gera uma imagem pronta para post de cada produto e baixa tudo num .zip.&#10;&#10;Dentro há um abrir.html: abra no navegador e verá cada arte ao lado da sua legenda, com botão de copiar em cada uma e um 'copiar todas'.&#10;&#10;Limite de 40 por vez.">Gerar artes em lote</button>
   </div>
 
   <details class="filtros-avancados" id="filtros-avancados">
@@ -192,7 +222,7 @@
     <button class="secundario" id="btn-vitrine-post"
       data-dica="Copia só os produtos curados, formatados para colar direto numa mensagem ou legenda.">Copiar como post</button>
     <button id="btn-lote-vitrine"
-      data-dica="Gera a arte de cada produto da vitrine e baixa tudo num .zip, com legendas e roteiros no mesmo pacote.">Gerar artes em lote</button>
+      data-dica="Gera a arte de cada produto da vitrine e baixa num .zip.&#10;&#10;Abra o abrir.html de dentro do zip: cada arte aparece com a legenda ao lado, pronta para copiar.">Gerar artes em lote</button>
     <button class="secundario" id="btn-vitrine-recarregar"
       data-dica="Busca de novo no banco. Use depois de curar produtos em outra aba ou de rodar uma coleta.">Recarregar</button>
   </div>
@@ -402,9 +432,15 @@
           </label>
         </div>
 
-        <label data-dica="Texto pronto para colar na legenda do post: nome, preço, desconto, prova social, link e hashtags.&#10;&#10;Pode editar aqui antes de copiar — texto com a sua voz converte mais que texto genérico.">
+        <label data-dica="Estruturas de copy conhecidas, preenchidas com os dados reais deste produto.&#10;&#10;Não são posts copiados de outros criadores: não existe API que entregue conteúdo de terceiros, e raspar perfil alheio violaria os termos das redes.&#10;&#10;Cada modelo diz em que situação costuma funcionar melhor.">
+          Modelo de post
+          <select id="arte-modelo"></select>
+        </label>
+        <p class="explicacao" id="arte-modelo-quando"></p>
+
+        <label data-dica="Texto pronto para colar na legenda do post.&#10;&#10;Pode editar aqui antes de copiar — texto com a sua voz converte mais que texto genérico.">
           Legenda pronta
-          <textarea id="arte-legenda" rows="10"></textarea>
+          <textarea id="arte-legenda" rows="12"></textarea>
         </label>
         <button class="secundario" id="arte-copiar-legenda"
           data-dica="Copia a legenda como está no campo acima, incluindo suas edições.">Copiar legenda</button>
@@ -423,6 +459,7 @@
 <div id="aviso" class="aviso" hidden></div>
 <script src="/estatico/dicas.js"></script>
 <script src="/estatico/zip.js"></script>
+<script src="/estatico/modelos.js"></script>
 <script src="/estatico/arte.js"></script>
 <script src="/estatico/app.js"></script>
 </body>

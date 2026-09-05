@@ -88,7 +88,7 @@ async function alternarVitrine(botao) {
 
 const LIMITE_LOTE = 40;
 
-/** Gera um ZIP com as artes e um txt de legendas/roteiros. */
+/** Gera um ZIP com as artes e uma página que mostra tudo montado. */
 async function gerarLote(lista, botao) {
   if (!lista.length) return avisar("nada para gerar", true);
   const itens = lista.slice(0, LIMITE_LOTE);
@@ -118,7 +118,8 @@ async function gerarLote(lista, botao) {
 
     const dia = new Date().toISOString().slice(0, 10);
     ZIP.baixar(zip, `flow02-artes-${dia}${canal ? "-" + canal : ""}.zip`);
-    avisar(`${itens.length} artes + legendas no zip`);
+    avisar(`${itens.length} artes no zip — descompacte e abra o abrir.html`,
+           false, 7000);
     if (lista.length > LIMITE_LOTE) {
       avisar(`limitado a ${LIMITE_LOTE} por lote`, true);
     }
@@ -202,7 +203,16 @@ function canalEscolhido() {
   return escolha;
 }
 
-/** Copia o link de afiliado. Com canal escolhido, encurta com sub-ID. */
+/**
+ * Copia o post pronto — não só o link.
+ *
+ * Link solto num grupo é ignorado: ninguém clica em URL sem saber o que é.
+ * O texto completo traz nome, preço, economia, prova social e o link, tudo
+ * no formato do modelo escolhido em "Copiar como".
+ *
+ * O link é sempre o de afiliado; com canal escolhido, gera um novo marcado
+ * com o sub-ID para você saber depois de onde veio a venda.
+ */
 async function copiarLink(botao) {
   const rotulo = botao.textContent;
   let link = decodeURIComponent(botao.dataset.link || "");
@@ -227,8 +237,15 @@ async function copiarLink(botao) {
     botao.textContent = rotulo;
     return avisar("sem link", true);
   }
+
+  const modelo = $("filtro-modelo")?.value || "achadinho";
+  const item = ultimoRanking.find((i) => i.item_id === botao.dataset.item);
+  const texto = (modelo === "so-link" || !item)
+    ? link
+    : MODELOS.montar(modelo, item, link);
+
   try {
-    await navigator.clipboard.writeText(link);
+    await navigator.clipboard.writeText(texto);
   } catch {
     botao.textContent = rotulo;
     return avisar("não foi possível copiar", true);
@@ -324,6 +341,11 @@ function escapar(texto) {
 
 /** Linha compacta: nome e loja à esquerda, dinheiro e EPC à direita. */
 function linhaOferta(item) {
+  const periodo = item.no_periodo && item.no_periodo.delta > 0
+    ? `<span class="selo-quente" data-dica="Unidades vendidas entre ${item.no_periodo.base} e hoje, calculado subtraindo o acumulado das duas coletas.&#10;&#10;Total de sempre: ${numero(item.no_periodo.acumulado)}.">+${numero(item.no_periodo.delta)} no período${
+        item.tendencia ? ` · +${numero(item.tendencia, 0)}%` : ""}</span>`
+    : "";
+
   const variantes = item.variantes > 1
     ? `<span class="selo-variantes" data-dica="Este produto aparece em ${item.variantes} anúncios diferentes — versões, tamanhos ou lojas. Mostrando o de melhor EPC.">${item.variantes} versões</span>`
     : "";
@@ -334,6 +356,7 @@ function linhaOferta(item) {
     item.rating ? `${numero(item.rating, 1)} de nota` : "",
     textoDesconto(item),
     seloPreco(item),
+    periodo,
     variantes,
     seloVelocidade(item),
     seloFragilidade(item),
@@ -349,6 +372,7 @@ function linhaOferta(item) {
   const foto = item.imagem
     ? `<img class="foto" src="${escapar(item.imagem)}" alt="" loading="lazy">`
     : '<div class="foto"></div>';
+
   const op = item.oportunidade;
   const selo = op && op.forte
     ? `<span class="selo-oportunidade" data-dica="Todos os ${op.total} critérios avaliados foram atendidos:&#10;&#10;${
@@ -387,7 +411,8 @@ function linhaOferta(item) {
         data-dica="Abre a página do produto na Shopee, numa aba nova.&#10;&#10;O link já é o seu de afiliado: se alguém comprar por ele, a comissão é sua. Serve para conferir o produto antes de divulgar.">Abrir</a>` : ""}
       <button class="acao-icone" data-link="${encodeURIComponent(item.link || "")}"
               data-origem="${encodeURIComponent(item.link_produto || item.link || "")}"
-              data-dica="Copia o link de afiliado para a área de transferência.&#10;&#10;Se você escolheu um canal em 'Divulgar em', gera um link novo marcado com esse canal — assim você descobre depois de onde veio a venda.">Copiar</button>
+              data-item="${escapar(item.item_id)}"
+              data-dica="Copia o POST COMPLETO: nome, preço, economia, prova social, link de afiliado e hashtags — pronto para colar.&#10;&#10;O formato segue o que estiver em 'Copiar como'. Para receber só a URL, escolha 'só o link'.&#10;&#10;Com um canal em 'Divulgar em', gera link marcado para você saber de onde veio a venda.">Copiar</button>
       <button class="acao-icone" data-arte="${item.item_id}"
               data-dica="Monta uma imagem pronta para post com a foto, o preço, o selo de desconto e a prova social.&#10;&#10;Abre com prévia ao vivo, escolha de formato (feed, stories, quadrado), download em PNG, legenda pronta e roteiro cronometrado para gravar vídeo.">Arte</button>
       <button class="acao-icone ${item.na_vitrine ? "curado" : ""}"
@@ -507,6 +532,90 @@ function seloPreco(item) {
   return "";
 }
 
+// -------------------------------------------------------------- categorias
+
+/** Preenche o seletor com as categorias que apareceram na coleta. */
+async function carregarCategorias() {
+  try {
+    const dados = await api("/api/categorias");
+    const seletor = $("filtro-categoria");
+    const anterior = seletor.value;
+    seletor.innerHTML = '<option value="">todas as categorias</option>'
+      + dados.itens.map((c) =>
+        `<option value="${escapar(c.id)}">${escapar(c.rotulo || c.id)}`
+        + ` (${c.itens})</option>`).join("");
+    if (anterior) seletor.value = anterior;
+  } catch (erro) {
+    // Categoria é conveniência: se falhar, o resto do painel continua.
+    console.warn("categorias:", erro.message);
+  }
+}
+
+/**
+ * Aviso quando o período pedido não tem coleta para comparar.
+ *
+ * "Vendidos na última semana" precisa da coleta de sete dias atrás para
+ * subtrair. Sem ela o certo é dizer isso, não devolver o acumulado fingindo
+ * ser do período.
+ */
+function avisarJanela(dados) {
+  const janela = Number(dados.janela || 0);
+  if (!janela) return "";
+  if (!dados.com_periodo) {
+    const oque = ordenacao === "tendencia" ? "crescimento" : "vendas no período";
+    return ` · ${oque} precisa de coleta de ${janela} dia(s) atrás para comparar —`
+      + " mostrando tudo. O histórico começa a existir a partir da segunda coleta.";
+  }
+  return ` · ${numero(dados.com_periodo)} produto(s) com base de comparação`;
+}
+
+// ------------------------------------------------------------- recarregar
+
+let momentoDaCarga = null;
+
+/**
+ * "atualizado agora" -> "há 3 min" -> "há 1 h".
+ *
+ * Sem isso não dá para saber se a tela mostra o dado de agora ou o de três
+ * horas atrás — e num painel que fica aberto o dia todo isso importa.
+ */
+function marcarAtualizado() {
+  momentoDaCarga = Date.now();
+  desenharRelogio();
+}
+
+function desenharRelogio() {
+  const alvo = $("atualizado-em");
+  if (!alvo || !momentoDaCarga) return;
+  const seg = Math.round((Date.now() - momentoDaCarga) / 1000);
+  alvo.textContent = seg < 45 ? "atualizado agora"
+    : seg < 3600 ? `atualizado há ${Math.round(seg / 60)} min`
+    : `atualizado há ${Math.round(seg / 3600)} h`;
+}
+
+async function recarregar() {
+  const botao = $("btn-recarregar");
+  botao.classList.add("ocupado");
+  try {
+    await carregarEstado();
+    await carregarRanking();
+  } finally {
+    // Segura o estado ocupado por um instante: em banco local a resposta é
+    // instantânea, e o botão piscaria sem o usuário perceber que agiu.
+    setTimeout(() => botao.classList.remove("ocupado"), 350);
+  }
+}
+
+/** Coleta de verdade: vai à Shopee, demora, e é o que traz produto novo. */
+function coletarAgora() {
+  const botao = $("btn-coletar-agora");
+  botao.classList.add("ocupado");
+  botao.textContent = "Buscando...";
+  trocarAba("acoes");
+  executar("coletar");
+  avisar("coletando na Shopee — acompanhe o andamento abaixo", false, 6000);
+}
+
 async function carregarRanking() {
   const parametros = new URLSearchParams({
     dia: $("filtro-dia").value || "hoje",
@@ -517,6 +626,8 @@ async function carregarRanking() {
     diversificar: $("filtro-diversificar").checked ? "1" : "0",
     so_oportunidades: $("filtro-oportunidades").value,
     agrupar_variantes: $("filtro-variantes").checked ? "1" : "0",
+    janela: $("filtro-janela").value,
+    categoria: $("filtro-categoria").value,
     ...filtrosDeValor(),
   });
   try {
@@ -546,7 +657,9 @@ async function carregarRanking() {
       `${dados.dia} · EPC é o retorno esperado por clique, em reais`
       + (ativos && cortou > 0
         ? ` · ${ativos} filtro(s) ativo(s) escondendo ${numero(cortou)} produto(s)`
-        : "");
+        : "")
+      + avisarJanela(dados);
+    marcarAtualizado();
     desenharRanking(itens);
   } catch (erro) {
     avisar(erro.message, true);
@@ -1033,9 +1146,18 @@ async function acompanhar() {
 
     if (rodando) {
       enquete = setTimeout(acompanhar, 800);
-    } else if (tarefa.estado === "ok") {
-      avisar(`${tarefa.rotulo}: concluído`);
-      recarregarAbaAtiva();
+    } else {
+      // Devolve o botão de coleta ao normal, com sucesso ou com falha:
+      // deixá-lo girando para sempre depois de um erro seria pior que o erro.
+      const coletar = $("btn-coletar-agora");
+      coletar.classList.remove("ocupado");
+      coletar.textContent = "Buscar novos na Shopee";
+
+      if (tarefa.estado === "ok") {
+        avisar(`${tarefa.rotulo}: concluído`);
+        recarregarAbaAtiva();
+        carregarEstado();
+      }
     }
   } catch (erro) {
     avisar(erro.message, true);
@@ -1105,6 +1227,7 @@ async function carregarEstado() {
       + `<span class="pilula">${estado.escopos_calibrados} escopos CVR</span>`;
 
     mostrarAlertaColeta(estado.coleta);
+    carregarCategorias();
 
     const opcoes = ['<option value="hoje">hoje</option>']
       .concat(estado.dias.map((d) => `<option value="${d}">${d}</option>`)).join("");
@@ -1126,7 +1249,7 @@ function ligarEventos() {
 
   ["filtro-dia", "filtro-plataforma", "filtro-limite", "filtro-diversificar",
    "filtro-desconto", "filtro-tabela", "filtro-oportunidades",
-   "filtro-variantes"]
+   "filtro-variantes", "filtro-janela", "filtro-categoria"]
     .forEach((id) => $(id).addEventListener("change", carregarRanking));
 
   [...Object.keys(FILTROS_VALOR), "f-so-vitrine"].forEach((id) =>
@@ -1135,6 +1258,20 @@ function ligarEventos() {
       carregarRanking();
     }));
   $("btn-limpar-filtros").addEventListener("click", limparFiltrosDeValor);
+  $("btn-recarregar").addEventListener("click", recarregar);
+  $("btn-coletar-agora").addEventListener("click", coletarAgora);
+
+  // O relógio precisa andar sozinho: sem isto ficaria em "agora" para sempre.
+  setInterval(desenharRelogio, 30_000);
+
+  // F5 recarrega a página inteira e o token some da barra em alguns
+  // navegadores; interceptar mantém o usuário logado.
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key === "F5" || (evento.ctrlKey && evento.key === "r")) {
+      evento.preventDefault();
+      recarregar();
+    }
+  });
 
   $("atalhos").addEventListener("click", (evento) => {
     const atalho = evento.target.closest(".atalho");
@@ -1198,6 +1335,12 @@ function ligarEventos() {
 
   $("arte-fechar").addEventListener("click", ARTE.fechar);
   $("arte-formato").addEventListener("change", ARTE.redesenhar);
+
+  // "só o link" fica por último: o padrão passa a ser o post completo, que
+  // é o que de fato se cola num grupo.
+  $("filtro-modelo").innerHTML = MODELOS.lista()
+    .map((m) => `<option value="${m.id}">${m.nome}</option>`).join("")
+    + '<option value="so-link">só o link</option>';
 
   const marca = ARTE.marca();
   $("arte-assinatura").value = marca.assinatura;

@@ -553,6 +553,8 @@ apresenta um formulário e autentica pelo Firebase Auth REST.
 | `historico` | Ranking somando todos os dias coletados |
 | `ganhos` | Comissão que de fato entrou |
 | `backtest` | Mede se o EPC previsto acertou o que rendeu |
+| `buscar` | Procura produtos por palavra-chave na API |
+| `campanha` | Quais produtos aguentam tráfego pago no seu CPC |
 | `saude` | Link morto, produtos comprados juntos, cadência de repost |
 | `vitrine` | Seleção curada que vai para a página pública |
 | `alvo` | Avisa quando o preço cair abaixo de um valor |
@@ -862,6 +864,60 @@ rende mais que caçar item solto todo dia.
 A coluna `orcamento` vem do `remainingBudget` — verba restante da campanha da
 loja, que não existe no nível do produto. Perto de zero, a comissão alta está
 prestes a cair.
+
+---
+
+### `buscar`
+
+Procura por palavra-chave, fora das consultas fixas do `config.toml`.
+
+```powershell
+.\flow02.cmd buscar "creatina"
+.\flow02.cmd buscar "protetor solar" --ordenar 2 --gravar
+```
+
+| Flag | Descrição |
+|---|---|
+| `--ordenar` | 5 = maior comissão, 2 = mais vendidos, 4 = menor preço |
+| `--paginas` | Quantas páginas buscar |
+| `--gravar` | Inclui os achados no ranking do dia |
+
+As consultas do `config.toml` trazem sempre o mesmo ranking global. Use isto
+quando já souber o nicho, em vez de esperar o produto aparecer no topo.
+
+---
+
+### `campanha`
+
+Antes de gastar em anúncio: quanto cada produto precisa converter para não
+dar prejuízo.
+
+```powershell
+.\flow02.cmd campanha --cpc 1.00
+```
+
+```
+produto                  R$/venda  conv. min  cliques/venda  teste R$
+10 Potes Bálsamo Jé's      254.91      0.39%            255       765
+Panela de Pressão 5L        74.96      1.33%             75       225
+```
+
+A conta é uma divisão:
+
+```
+empata quando:  comissão × conversão = CPC
+logo:           conversão mínima = CPC ÷ comissão
+```
+
+**Para tráfego pago, a lógica se inverte em relação ao orgânico.** No
+orgânico o clique é de graça, então volume manda. No pago cada clique custa,
+e comissão alta tolera conversão baixa — um produto de R$ 255 precisa
+converter 0,39%, um de R$ 36 precisa de 2,7%.
+
+A coluna `teste R$` é o orçamento para o teste render umas 3 vendas. Testar
+com menos não distingue produto ruim de amostra pequena.
+
+O CPC não é inventado: é o que **você** observa no gerenciador de anúncios.
 
 ---
 
@@ -2590,5 +2646,3 @@ coletar está falhando com exit -536870873 ao chamar a API da Shopee. O resto fu
 427 testes passando. Tudo isso já está documentado na seção "O que falta fazer" no topo do README.
 
 
-#   m a y b l u e - v 2  
- 

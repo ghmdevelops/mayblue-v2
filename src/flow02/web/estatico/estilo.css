@@ -182,6 +182,25 @@ main { padding: var(--e6) var(--e5) var(--e7); max-width: 1320px; margin: 0 auto
 .titulo-secao .legenda {
   font-size: 13.5px; color: var(--texto-2); line-height: 1.5;
 }
+.titulo-secao.com-acoes {
+  flex-direction: row; align-items: flex-end; justify-content: space-between;
+  gap: var(--e4); flex-wrap: wrap;
+}
+.acoes-titulo { display: flex; align-items: center; gap: var(--e2); }
+.atualizado {
+  font-size: 12.5px; color: var(--texto-3); white-space: nowrap;
+  margin-right: var(--e2);
+}
+/* Enquanto recarrega, o botão precisa parecer ocupado: clicar de novo e não
+   ver nada acontecer é o que faz o usuário clicar cinco vezes. */
+button.ocupado { opacity: .6; pointer-events: none; }
+button.ocupado::after {
+  content: ""; display: inline-block; margin-left: 8px;
+  width: 11px; height: 11px; vertical-align: -1px;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; animation: girar .7s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
 .titulo-secao + .atalhos, .titulo-secao + .filtros { margin-top: var(--e5); }
 
 /* -------------------------------------------------- atalhos de ordenação */

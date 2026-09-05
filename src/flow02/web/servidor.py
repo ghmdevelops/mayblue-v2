@@ -59,6 +59,7 @@ ROTAS_GET = {
     "/api/vitrine": api.vitrine,
     "/api/saude": api.saude,
     "/api/compartilhados": api.compartilhados,
+    "/api/categorias": api.lista_categorias,
 }
 
 

@@ -22,6 +22,9 @@ class Oferta:
     link_produto: str | None = None
     imagem: str | None = None
     expira_em: str | None = None
+    # Quando a oferta entrou no ar. Combinado com `vendas`, e a unica forma
+    # de estimar ritmo de venda numa coleta so -- sem esperar o dia seguinte.
+    comecou_em: str | None = None
     # A taxa total se divide entre o que o vendedor banca e o que a Shopee
     # banca. A parte do vendedor e campanha dele e pode acabar a qualquer
     # momento; a da Shopee e estavel. Guardar as duas permite dizer quais
